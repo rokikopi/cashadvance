@@ -31,7 +31,7 @@ class _SplashPageState extends State<SplashPage> {
   final List<Map<String, String>> slideData = [
     {"title": "Manage Your Finances Smarter", "image": "images/page1.jpg"},
     {"title": "Instant Cash Advances When Needed", "image": "images/page2.jpg"},
-    {"title": "Secure and Fast Transitions", "image": "images/page3.jpg"},
+    {"title": "Secure and Fast Transactions", "image": "images/page3.jpg"},
   ];
 
   @override
@@ -199,7 +199,7 @@ class _SplashPageState extends State<SplashPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const SplashPage(),
+                        builder: (context) => const RegisterPage(),
                       ),
                     );
                   },
