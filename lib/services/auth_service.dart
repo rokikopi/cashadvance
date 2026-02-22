@@ -24,7 +24,6 @@ class AuthService {
         throw UnimplementedError("Mobile sign-in logic goes here");
       }
     } catch (e) {
-      print("Auth Service Error: $e");
       return null;
     }
   }
