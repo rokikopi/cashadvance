@@ -116,6 +116,7 @@ class _SplashPageState extends State<SplashPage> {
           _startTimer();
         },
         child: PageView.builder(
+          key: const PageStorageKey('myInfiniteSlider'),
           controller: _imageController,
           onPageChanged: (index) => setState(() => _virtualPage = index),
           itemBuilder: (context, index) {
@@ -136,69 +137,77 @@ class _SplashPageState extends State<SplashPage> {
 
   Widget _buildFixedContentArea(bool isDesktop, int actualIndex) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(40.0, 10.0, 40.0, 15.0),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(40.0, 20.0, 40.0, 20.0),
+      // Using a Stack ensures elements are "pinned" to their relative positions
+      child: Stack(
         children: [
-          // 1. LOGO AT THE TOP
+          // 1. PINNED LOGO (Top)
           Align(
             alignment: isDesktop ? Alignment.topLeft : Alignment.topCenter,
             child: Image.asset(
               'images/logo.png',
-              height: 120,
+              height: isDesktop ? 120 : 80,
               fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return const Icon(
-                  Icons.account_balance_wallet,
-                  size: 40,
-                  color: AppColors.primary,
-                );
-              },
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.account_balance_wallet,
+                size: 40,
+                color: AppColors.primary,
+              ),
             ),
           ),
 
-          const Spacer(), // Pushes the following content to the center
-          // 2. MIDDLE SECTION: Title and Indicators
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: isDesktop
-                ? CrossAxisAlignment.start
-                : CrossAxisAlignment.center,
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 600),
-                child: Text(
-                  slideData[actualIndex]["title"]!,
-                  key: ValueKey<int>(actualIndex),
-                  textAlign: isDesktop ? TextAlign.left : TextAlign.center,
-                  style: GoogleFonts.inter(
-                    fontSize: isDesktop ? 36.0 : 26.0,
-                    height: 1.2,
-                    color: AppColors.textMain,
-                    fontWeight: FontWeight.w800,
+          // 2. PINNED MIDDLE SECTION (Center)
+          Align(
+            alignment: isDesktop ? Alignment.centerLeft : Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min, // Very important
+              crossAxisAlignment: isDesktop
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 600),
+                  child: Text(
+                    slideData[actualIndex]["title"]!,
+                    key: ValueKey<int>(actualIndex),
+                    textAlign: isDesktop ? TextAlign.left : TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: isDesktop ? 36.0 : 26.0,
+                      height: 1.2,
+                      color: AppColors.textMain,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24.0),
-              _buildPageIndicator(actualIndex),
-            ],
+                const SizedBox(height: 16.0),
+                _buildPageIndicator(actualIndex),
+              ],
+            ),
           ),
 
-          const Spacer(), // Pushes buttons to the bottom
-          // 3. BOTTOM SECTION: Action Buttons
-          Column(
-            children: [
-              PrimaryButton(
-                text: "Get Started",
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SplashPage()),
-                  );
-                },
-              ),
-              const SizedBox(height: 16.0),
-              _buildLoginLink(),
-            ],
+          // 3. PINNED BOTTOM SECTION (Bottom)
+          Align(
+            alignment: isDesktop
+                ? Alignment.bottomLeft
+                : Alignment.bottomCenter,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                PrimaryButton(
+                  text: "Get Started",
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SplashPage(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8.0),
+                _buildLoginLink(),
+              ],
+            ),
           ),
         ],
       ),
