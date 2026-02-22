@@ -33,6 +33,9 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
   bool _isGoogleUser = false;
 
+  // Hover state for the login link
+  bool _isLoginHovered = false;
+
   @override
   void dispose() {
     _fNameController.dispose();
@@ -97,7 +100,6 @@ class _RegisterPageState extends State<RegisterPage> {
             );
       } else {
         final googleUser = await _googleSignIn.signIn();
-
         final googleAuth = await googleUser?.authentication;
 
         final AuthCredential credential = GoogleAuthProvider.credential(
@@ -285,6 +287,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
                   const SizedBox(height: 25),
 
+                  // Updated Log In Link with Shadow/Hover Effects
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -294,13 +297,46 @@ class _RegisterPageState extends State<RegisterPage> {
                           color: AppColors.textSecondary,
                         ),
                       ),
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Text(
-                          "Log In",
-                          style: GoogleFonts.inter(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
+                      MouseRegion(
+                        onEnter: (_) => setState(() => _isLoginHovered = true),
+                        onExit: (_) => setState(() => _isLoginHovered = false),
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _isLoginHovered
+                                  ? AppColors.primary.withValues(alpha: 0.08)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: _isLoginHovered
+                                  ? [
+                                      BoxShadow(
+                                        color: AppColors.primary.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : [],
+                            ),
+                            child: Text(
+                              "Log In",
+                              style: GoogleFonts.inter(
+                                color: _isLoginHovered
+                                    ? AppColors.primaryHover
+                                    : AppColors.primary,
+                                fontWeight: _isLoginHovered
+                                    ? FontWeight.w800
+                                    : FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -386,7 +422,7 @@ class _RegisterPageState extends State<RegisterPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.network(
-            'https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png',
+            'https://firebasestorage.googleapis.com/v0/b/flutterbricks-public.appspot.com/o/crypto%2Fsearch%20(2).png?alt=media&token=24a918f7-3564-4290-b7e4-08ff54b3c94c',
             height: 20,
             errorBuilder: (c, e, s) => const Icon(Icons.g_mobiledata, size: 30),
           ),

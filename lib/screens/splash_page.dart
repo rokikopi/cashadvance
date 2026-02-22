@@ -28,6 +28,9 @@ class _SplashPageState extends State<SplashPage> {
   Timer? _timer;
   bool _isUserInteracting = false;
 
+  // Hover state for the login link
+  bool _isLoginHovered = false;
+
   final List<Map<String, String>> slideData = [
     {"title": "Manage Your Finances Smarter", "image": "images/page1.jpg"},
     {"title": "Instant Cash Advances When Needed", "image": "images/page2.jpg"},
@@ -138,10 +141,8 @@ class _SplashPageState extends State<SplashPage> {
   Widget _buildFixedContentArea(bool isDesktop, int actualIndex) {
     return Container(
       padding: const EdgeInsets.fromLTRB(40.0, 20.0, 40.0, 20.0),
-      // Using a Stack ensures elements are "pinned" to their relative positions
       child: Stack(
         children: [
-          // 1. PINNED LOGO (Top)
           Align(
             alignment: isDesktop ? Alignment.topLeft : Alignment.topCenter,
             child: Image.asset(
@@ -156,11 +157,10 @@ class _SplashPageState extends State<SplashPage> {
             ),
           ),
 
-          // 2. PINNED MIDDLE SECTION (Center)
           Align(
             alignment: isDesktop ? Alignment.centerLeft : Alignment.center,
             child: Column(
-              mainAxisSize: MainAxisSize.min, // Very important
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: isDesktop
                   ? CrossAxisAlignment.start
                   : CrossAxisAlignment.center,
@@ -185,7 +185,6 @@ class _SplashPageState extends State<SplashPage> {
             ),
           ),
 
-          // 3. PINNED BOTTOM SECTION (Bottom)
           Align(
             alignment: isDesktop
                 ? Alignment.bottomLeft
@@ -204,8 +203,9 @@ class _SplashPageState extends State<SplashPage> {
                     );
                   },
                 ),
-                const SizedBox(height: 8.0),
+                const SizedBox(height: 12.0), // Slightly increased spacing
                 _buildLoginLink(),
+                const SizedBox(height: 10.0),
               ],
             ),
           ),
@@ -255,19 +255,47 @@ class _SplashPageState extends State<SplashPage> {
             color: AppColors.textSecondary,
           ),
         ),
-        TextButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SplashPage()),
-            );
-          },
-          child: Text(
-            "Log In",
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: AppColors.primary,
-              fontWeight: FontWeight.w700,
+        MouseRegion(
+          onEnter: (_) => setState(() => _isLoginHovered = true),
+          onExit: (_) => setState(() => _isLoginHovered = false),
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginPage()),
+              );
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: _isLoginHovered
+                    ? AppColors.primary.withValues(alpha: 0.08)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: _isLoginHovered
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : [],
+              ),
+              child: Text(
+                "Log In",
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: _isLoginHovered
+                      ? AppColors.primaryHover
+                      : AppColors.primary,
+                  fontWeight: _isLoginHovered
+                      ? FontWeight.w800
+                      : FontWeight.w700,
+                ),
+              ),
             ),
           ),
         ),
