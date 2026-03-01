@@ -32,9 +32,9 @@ class _SplashPageState extends State<SplashPage> {
   bool _isLoginHovered = false;
 
   final List<Map<String, String>> slideData = [
-    {"title": "Manage Your Finances Smarter", "image": "images/page1.jpg"},
-    {"title": "Instant Cash Advances When Needed", "image": "images/page2.jpg"},
-    {"title": "Secure and Fast Transactions", "image": "images/page3.jpg"},
+    {"title": "Manage Your Finances Smarter", "image": "assets/images/page1.jpg"},
+    {"title": "Instant Cash Advances When Needed", "image": "assets/images/page2.jpg"},
+    {"title": "Secure and Fast Transactions", "image": "assets/images/page3.jpg"},
   ];
 
   @override
