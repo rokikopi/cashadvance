@@ -145,8 +145,8 @@ class _SplashPageState extends State<SplashPage> {
         children: [
           Align(
             alignment: isDesktop ? Alignment.topLeft : Alignment.topCenter,
-            child: Image.network(
-              'assets/assets/images/logo.png',
+            child: Image.asset(
+              'assets/images/logo.png',
               height: isDesktop ? 120 : 80,
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) => const Icon(
