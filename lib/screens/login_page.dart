@@ -2,8 +2,10 @@ import 'package:cashadvance/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Required for role check
 import 'package:cashadvance/theme/constants.dart';
 import 'package:cashadvance/screens/register_page.dart';
+import 'package:cashadvance/screens/admin_page.dart'; // Required for admin redirect
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -29,7 +31,38 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  // --- Auth Logic ---
+  // --- Auth & Routing Logic ---
+
+  /// Checks if the user is an admin and routes them to the correct page
+  Future<void> _routeUser(User user) async {
+    try {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (mounted) {
+        bool isAdmin = false;
+        if (userDoc.exists) {
+          final data = userDoc.data() as Map<String, dynamic>;
+          isAdmin = data['isAdmin'] ?? false;
+        }
+
+        if (isAdmin) {
+          // If Admin, replace login stack with AdminPage
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const AdminPage()),
+            (route) => false,
+          );
+        } else {
+          // If User, pop to return to Home (handled by AuthGate)
+          Navigator.of(context).pop();
+        }
+      }
+    } catch (e) {
+      _showError("Error identifying user role: $e");
+    }
+  }
 
   Future<void> _handleEmailLogin() async {
     if (_emailController.text.trim().isEmpty ||
@@ -39,15 +72,13 @@ class _LoginPageState extends State<LoginPage> {
     }
     setState(() => _isLoading = true);
     try {
-      await _authService.signInWithEmail(
+      final userCredential = await _authService.signInWithEmail(
         _emailController.text.trim(),
         _pwController.text.trim(),
       );
 
-      // DISMISS LOGIN PAGE:
-      // Once signed in, we pop this page so AuthGate can show the HomePage.
-      if (mounted) {
-        Navigator.of(context).pop();
+      if (userCredential.user != null) {
+        await _routeUser(userCredential.user!);
       }
     } on FirebaseAuthException catch (e) {
       _showError(_friendlyAuthError(e.code));
@@ -63,14 +94,8 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final userCredential = await _authService.signInWithGoogle();
 
-      // SUCCESSFUL GOOGLE SIGN IN:
-      if (userCredential != null) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          // Pop the login screen to reveal the HomePage managed by AuthGate
-          Navigator.of(context).pop();
-        }
-        return;
+      if (userCredential?.user != null) {
+        await _routeUser(userCredential!.user!);
       }
     } catch (e) {
       _showError("Google Sign-In failed. Please try again.");
