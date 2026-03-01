@@ -1,10 +1,15 @@
-import 'package:intl/intl.dart'; // Add this to your pubspec.yaml for date formatting
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:cashadvance/theme/constants.dart';
+
+// New Imports for PDF and Printing
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -15,82 +20,207 @@ class HomePage extends StatelessWidget {
     final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      // 1. ACTION BUTTON TO APPLY
-      floatingActionButton: FloatingActionButton.extended(
+      backgroundColor: const Color(0xFFF8F9FA),
+      floatingActionButton: FloatingActionButton(
         onPressed: () => _showApplyPopup(context, uid),
         backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: Text(
-          "Apply Now",
-          style: GoogleFonts.inter(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
+        elevation: 4,
+        child: const Icon(Icons.add, color: Colors.white, size: 30),
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            backgroundColor: Colors.white,
-            elevation: 0,
-            pinned: true,
-            centerTitle: true,
-            toolbarHeight: 100,
-            expandedHeight: 120,
-            title: Padding(
-              padding: const EdgeInsets.only(top: 15.0),
-              child: Image.asset(
-                'assets/images/logo.png',
-                height: 80,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => const Icon(
-                  Icons.account_balance_wallet,
-                  color: AppColors.primary,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await Future.delayed(const Duration(milliseconds: 500));
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverAppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              pinned: true,
+              centerTitle: true,
+              toolbarHeight: 90,
+              expandedHeight: 110,
+              title: Padding(
+                padding: const EdgeInsets.only(top: 15.0),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  height: 65,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.account_balance_wallet,
+                    color: AppColors.primary,
+                    size: 40,
+                  ),
+                ),
+              ),
+              actions: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8.0, right: 8.0),
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(
+                        Icons.menu,
+                        color: AppColors.textMain,
+                        size: 28,
+                      ),
+                      offset: const Offset(0, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      onSelected: (value) async {
+                        if (value == 'logout') await authService.signOut();
+                      },
+                      itemBuilder: (context) => _buildMenuItems(uid),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: _buildResponsiveSummary(uid),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18.0,
+                  vertical: 8.0,
+                ),
+                child: Text(
+                  "Recent Activity",
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMain,
+                  ),
                 ),
               ),
             ),
-            actions: [
-              Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 8.0, right: 8.0),
-                  child: PopupMenuButton<String>(
-                    icon: const Icon(
-                      Icons.menu,
-                      color: AppColors.textMain,
-                      size: 28,
-                    ),
-                    onSelected: (value) async {
-                      if (value == 'logout') await authService.signOut();
-                    },
-                    itemBuilder: (context) => _buildMenuItems(uid),
+            _buildSliverAdvanceList(uid),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- UI BUILDERS ---
+
+  Widget _buildResponsiveSummary(String uid) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('advances')
+          .where('userId', isEqualTo: uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        double totalApproved = 0;
+        int pendingCount = 0;
+
+        if (snapshot.hasData) {
+          for (var doc in snapshot.data!.docs) {
+            var data = doc.data() as Map<String, dynamic>;
+            if (data['status'] == 'Approved') {
+              totalApproved += double.tryParse(data['amount'].toString()) ?? 0;
+            } else if (data['status'] == 'Pending') {
+              pendingCount++;
+            }
+          }
+        }
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            bool isSmall = constraints.maxWidth < 360;
+            return isSmall
+                ? Column(
+                    children: [
+                      _summaryCard(
+                        "Total Approved",
+                        "₱${NumberFormat('#,##0.00').format(totalApproved)}",
+                        Icons.payments,
+                        AppColors.primary,
+                      ),
+                      const SizedBox(height: 10),
+                      _summaryCard(
+                        "Pending Requests",
+                        pendingCount.toString(),
+                        Icons.history,
+                        Colors.orange,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: _summaryCard(
+                          "Total Approved",
+                          "₱${NumberFormat('#,##0.00').format(totalApproved)}",
+                          Icons.payments,
+                          AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _summaryCard(
+                          "Pending",
+                          pendingCount.toString(),
+                          Icons.history,
+                          Colors.orange,
+                        ),
+                      ),
+                    ],
+                  );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _summaryCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: color.withValues(alpha: 0.1),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: Colors.grey[600],
                   ),
                 ),
-              ),
-            ],
-          ),
-
-          // 2. DASHBOARD CONTENT & LIST OF ADVANCES
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 20),
-                  Text(
-                    "Your Cash Advances",
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textMain,
-                    ),
+                Text(
+                  value,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMain,
                   ),
-                  const SizedBox(height: 15),
-                  _buildAdvanceList(uid),
-                ],
-              ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
         ],
@@ -98,11 +228,8 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  // --- UI COMPONENTS ---
-
-  Widget _buildAdvanceList(String uid) {
+  Widget _buildSliverAdvanceList(String uid) {
     return StreamBuilder<QuerySnapshot>(
-      // Listening to the 'advances' collection for this specific user
       stream: FirebaseFirestore.instance
           .collection('advances')
           .where('userId', isEqualTo: uid)
@@ -110,185 +237,432 @@ class HomePage extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          );
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState();
+          return SliverToBoxAdapter(child: _buildEmptyState());
         }
 
-        return ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: snapshot.data!.docs.length,
-          itemBuilder: (context, index) {
-            var data =
-                snapshot.data!.docs[index].data() as Map<String, dynamic>;
-            return _buildAdvanceCard(data);
-          },
+        return SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate((context, index) {
+              var doc = snapshot.data!.docs[index];
+              var data = doc.data() as Map<String, dynamic>;
+              return _buildAdvanceCard(context, data, doc.id);
+            }, childCount: snapshot.data!.docs.length),
+          ),
         );
       },
     );
   }
 
-  Widget _buildAdvanceCard(Map<String, dynamic> data) {
-    Color statusColor;
-    switch (data['status']) {
-      case 'Approved':
-        statusColor = Colors.green;
-        break;
-      case 'Rejected':
-        statusColor = Colors.redAccent;
-        break;
-      default:
-        statusColor = Colors.orange; // Pending
-    }
+  Widget _buildAdvanceCard(
+    BuildContext context,
+    Map<String, dynamic> data,
+    String docId,
+  ) {
+    String status = data['status'] ?? 'Pending';
+    Color statusColor = status == 'Approved'
+        ? Colors.green
+        : (status == 'Rejected' ? Colors.redAccent : Colors.orange);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
+        border: Border.all(color: Colors.grey.shade100),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
         title: Text(
-          "₱${data['amount']}",
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+          "₱${NumberFormat('#,##0.00').format(data['amount'])}",
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(data['purpose'] ?? "No purpose provided"),
-            const SizedBox(height: 4),
             Text(
-              DateFormat(
-                'MMM dd, yyyy',
-              ).format((data['createdAt'] as Timestamp).toDate()),
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              data['purpose'] ?? "No purpose",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
+            Text(
+              data['createdAt'] != null
+                  ? DateFormat(
+                      'MM/dd/yyyy',
+                    ).format((data['createdAt'] as Timestamp).toDate())
+                  : "",
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ],
         ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            data['status'],
-            style: GoogleFonts.inter(
-              color: statusColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 40),
-        child: Column(
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.receipt_long_outlined,
-              size: 60,
-              color: Colors.grey.shade300,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                status,
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                ),
+              ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              "No active cash advances found.",
-              style: GoogleFonts.inter(color: Colors.grey),
-            ),
+            const SizedBox(width: 4),
+            // RE-SUBMIT / EDIT BUTTON
+            if (status == 'Pending' || status == 'Rejected')
+              IconButton(
+                tooltip: status == 'Rejected'
+                    ? 'Resubmit as New'
+                    : 'Edit Application',
+                icon: Icon(
+                  status == 'Rejected' ? Icons.refresh : Icons.edit_outlined,
+                  color: Colors.blue,
+                  size: 20,
+                ),
+                onPressed: () => _showApplyPopup(
+                  context,
+                  data['userId'],
+                  editDocId: docId,
+                  existingData: data,
+                ),
+              ),
+            // PDF ACTIONS
+            if (status == 'Approved') ...[
+              IconButton(
+                tooltip: 'Download PDF',
+                icon: const Icon(
+                  Icons.file_download_outlined,
+                  color: Colors.blue,
+                  size: 20,
+                ),
+                onPressed: () => _generatePDF(data, action: 'download'),
+              ),
+              IconButton(
+                tooltip: 'Print PDF',
+                icon: const Icon(
+                  Icons.print_outlined,
+                  color: Colors.green,
+                  size: 20,
+                ),
+                onPressed: () => _generatePDF(data, action: 'print'),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  // --- APPLICATION POPUP ---
+  // --- LOGIC ---
 
-  void _showApplyPopup(BuildContext context, String uid) async {
-    // 1. Fetch User Data for Autofill
+  Future<void> _generatePDF(
+    Map<String, dynamic> data, {
+    String action = 'print',
+  }) async {
+    final pdf = pw.Document();
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(data['userId'])
+        .get();
+    final userData = userDoc.data() ?? {};
+
+    final String employeeName =
+        "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}";
+    final String employeeId = userData['employeeId']?.toString() ?? "N/A";
+
+    final String position = userData['position'] ?? '';
+    final String department = userData['department'] ?? '';
+    final String positionDeptCombined =
+        (position.isNotEmpty && department.isNotEmpty)
+        ? "$position / $department"
+        : (position.isNotEmpty
+              ? position
+              : (department.isNotEmpty ? department : "N/A"));
+
+    final String dateStr = data['createdAt'] != null
+        ? DateFormat(
+            'MM/dd/yyyy',
+          ).format((data['createdAt'] as Timestamp).toDate())
+        : 'N/A';
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return pw.Container(
+            padding: const pw.EdgeInsets.all(15),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.black, width: 1),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Center(
+                  child: pw.Text(
+                    "CASH ADVANCE REQUEST",
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+                pw.Table(
+                  columnWidths: {
+                    0: const pw.FlexColumnWidth(3),
+                    1: const pw.FlexColumnWidth(2),
+                  },
+                  children: [
+                    pw.TableRow(
+                      children: [
+                        _pdfLabelValue("EMPLOYEE:", employeeName),
+                        _pdfLabelValue("NO:", employeeId),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        _pdfLabelValue(
+                          "POSITION / DEPT:",
+                          positionDeptCombined,
+                        ),
+                        _pdfLabelValue("DATE:", dateStr),
+                      ],
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 10),
+                pw.Table(
+                  border: pw.TableBorder.all(color: PdfColors.black),
+                  columnWidths: {
+                    0: const pw.FlexColumnWidth(3),
+                    1: const pw.FlexColumnWidth(1),
+                  },
+                  children: [
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.grey200,
+                      ),
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(5),
+                          child: pw.Text(
+                            "PURPOSE DESCRIPTION",
+                            style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(5),
+                          child: pw.Text(
+                            "AMOUNT",
+                            style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text(data['purpose'] ?? ""),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text(
+                            NumberFormat('#,##0.00').format(data['amount']),
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 40),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    _pdfSignatureBlock(
+                      "Requested by:",
+                      "Name & Signature of Employee",
+                    ),
+                    _pdfSignatureBlock("Checked by:", "Department Head"),
+                  ],
+                ),
+                pw.SizedBox(height: 30),
+                _pdfSignatureBlock("Released by:", ""),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    if (action == 'print') {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
+    } else {
+      await Printing.sharePdf(
+        bytes: await pdf.save(),
+        filename: 'Cash_Advance_$dateStr.pdf',
+      );
+    }
+  }
+
+  pw.Widget _pdfLabelValue(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.RichText(
+        text: pw.TextSpan(
+          children: [
+            pw.TextSpan(
+              text: "$label ",
+              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  pw.Widget _pdfSignatureBlock(String label, String subLabel) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 25),
+        pw.Container(
+          width: 180,
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(color: PdfColors.black, width: 1),
+            ),
+          ),
+        ),
+        if (subLabel.isNotEmpty)
+          pw.Text(subLabel, style: const pw.TextStyle(fontSize: 8)),
+      ],
+    );
+  }
+
+  void _showApplyPopup(
+    BuildContext context,
+    String uid, {
+    String? editDocId,
+    Map<String, dynamic>? existingData,
+  }) async {
+    // Show a quick loading indicator if we are fetching user data
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
         .get();
     final userData = userDoc.data() ?? {};
 
-    final amountController = TextEditingController();
-    final purposeController = TextEditingController();
-    final String currentDate = DateFormat(
-      'MMMM dd, yyyy',
-    ).format(DateTime.now());
+    final amountController = TextEditingController(
+      text: existingData != null ? existingData['amount'].toString() : "",
+    );
+    final purposeController = TextEditingController(
+      text: existingData != null ? existingData['purpose'] : "",
+    );
 
     if (!context.mounted) return;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-      ),
-      builder: (context) => Padding(
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 25,
-          right: 25,
-          top: 25,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
         ),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
               Text(
-                "New Cash Advance",
+                editDocId == null
+                    ? "Apply for Advance"
+                    : (existingData?['status'] == 'Rejected'
+                          ? "Resubmit Application"
+                          : "Edit Request"),
                 style: GoogleFonts.inter(
-                  fontSize: 22,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const Divider(),
-              const SizedBox(height: 10),
-
-              // Autofilled Info (Read Only)
-              _readOnlyField(
-                "Employee",
-                "${userData['firstName']} ${userData['lastName']}",
-              ),
-              _readOnlyField(
-                "ID & Dept",
-                "${userData['employeeId']} | ${userData['department']}",
-              ),
-              _readOnlyField("Date", currentDate),
-
               const SizedBox(height: 15),
-
-              // Input Fields
+              _infoRow(
+                "Employee",
+                "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}",
+              ),
+              _infoRow(
+                "ID / Dept",
+                "${userData['employeeId'] ?? ''} | ${userData['department'] ?? ''}",
+              ),
+              const SizedBox(height: 15),
               TextField(
                 controller: amountController,
-                keyboardType: TextInputType.number,
-                decoration: _inputStyle("Amount (₱)", Icons.money),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: _inputStyle("Amount (₱)"),
               ),
-              const SizedBox(height: 15),
+              const SizedBox(height: 12),
               TextField(
                 controller: purposeController,
-                maxLines: 3,
-                decoration: _inputStyle(
-                  "Purpose of Cash Advance",
-                  Icons.description,
-                ),
+                maxLines: 2,
+                decoration: _inputStyle("Purpose"),
               ),
-
-              const SizedBox(height: 25),
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
-                height: 55,
+                height: 50,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -296,22 +670,28 @@ class HomePage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () => _submitApplication(
+                  onPressed: () => _submit(
                     context,
                     uid,
                     amountController.text,
                     purposeController.text,
+                    editDocId: editDocId,
+                    existingStatus: existingData?['status'],
                   ),
                   child: Text(
-                    "Submit Request",
-                    style: GoogleFonts.inter(
+                    editDocId == null
+                        ? "Submit"
+                        : (existingData?['status'] == 'Rejected'
+                              ? "Submit as New"
+                              : "Update Request"),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -319,58 +699,91 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Future<void> _submitApplication(
+  Future<void> _submit(
     BuildContext context,
     String uid,
     String amount,
-    String purpose,
-  ) async {
+    String purpose, {
+    String? editDocId,
+    String? existingStatus,
+  }) async {
     if (amount.isEmpty || purpose.isEmpty) return;
 
-    await FirebaseFirestore.instance.collection('advances').add({
+    final data = {
       'userId': uid,
-      'amount': amount,
+      'amount': double.tryParse(amount) ?? 0,
       'purpose': purpose,
       'status': 'Pending',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    // LOGIC: If it's a new app OR the previous one was REJECTED, create a NEW document.
+    if (editDocId == null || existingStatus == 'Rejected') {
+      data['createdAt'] = FieldValue.serverTimestamp();
+      if (existingStatus == 'Rejected') {
+        data['resubmittedFrom'] = editDocId as Object; // Optional: track history
+      }
+      await FirebaseFirestore.instance.collection('advances').add(data);
+    } else {
+      // Otherwise, update the existing document (only for Pending items)
+      await FirebaseFirestore.instance
+          .collection('advances')
+          .doc(editDocId)
+          .update(data);
+    }
 
     if (context.mounted) Navigator.pop(context);
   }
 
-  // --- HELPERS ---
-
-  Widget _readOnlyField(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(
-        "$label: $value",
-        style: GoogleFonts.inter(color: Colors.grey.shade600, fontSize: 13),
-      ),
+  Widget _buildEmptyState() {
+    return Column(
+      children: [
+        const SizedBox(height: 50),
+        Icon(Icons.receipt_long_outlined, size: 60, color: Colors.grey[300]),
+        const SizedBox(height: 10),
+        Text(
+          "No applications found.",
+          style: GoogleFonts.inter(color: Colors.grey),
+        ),
+      ],
     );
   }
 
-  InputDecoration _inputStyle(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, color: AppColors.primary),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-    );
-  }
+  Widget _infoRow(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 4.0),
+    child: Text(
+      "$label: $value",
+      style: const TextStyle(fontSize: 12, color: Colors.grey),
+    ),
+  );
+
+  InputDecoration _inputStyle(String label) => InputDecoration(
+    labelText: label,
+    filled: true,
+    fillColor: Colors.grey[100],
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+  );
 
   List<PopupMenuEntry<String>> _buildMenuItems(String uid) {
     return [
-      PopupMenuItem<String>(
+      PopupMenuItem(
         enabled: false,
         child: FutureBuilder<DocumentSnapshot>(
           future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
           builder: (context, snapshot) {
-            String firstName = snapshot.hasData
-                ? (snapshot.data!['firstName'] ?? "User")
-                : "User";
+            String name = "User";
+            if (snapshot.hasData && snapshot.data!.exists) {
+              name = snapshot.data!['firstName'] ?? "User";
+            }
             return Text(
-              "Hi, $firstName",
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              "Hi, $name",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
             );
           },
         ),

@@ -128,8 +128,6 @@ class _RegisterPageState extends State<RegisterPage> {
       _showSuccess("Registration Complete!");
 
       // 3. AUTO-REDIRECT LOGIC
-      // Since RegisterPage was pushed from LoginPage, we need to clear both.
-      // Navigator.popUntil removes all pages until it hits the root (AuthGate).
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
@@ -307,7 +305,14 @@ class _RegisterPageState extends State<RegisterPage> {
                         onExit: (_) => setState(() => _isLoginHovered = false),
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
-                          onTap: () => Navigator.pop(context),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const LoginPage(),
+                              ),
+                            );
+                          },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             padding: const EdgeInsets.symmetric(
