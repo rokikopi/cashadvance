@@ -1,7 +1,7 @@
+import 'package:cashadvance/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cashadvance/theme/constants.dart';
 import 'package:cashadvance/screens/register_page.dart';
 
@@ -13,20 +13,12 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // Using dynamic to bypass web analyzer issues
-  final dynamic _googleSignIn = GoogleSignIn(
-    clientId:
-        '149500606282-bv0krkbqdji6pps6mt8mqkfhdo4p2d1d.apps.googleusercontent.com',
-    scopes: ['email', 'https://www.googleapis.com/auth/userinfo.profile'],
-  );
-
+  final AuthService _authService = AuthService();
   final _emailController = TextEditingController();
   final _pwController = TextEditingController();
 
   bool _isPasswordVisible = false;
   bool _isLoading = false;
-
-  // Hover States
   bool _isForgotHovered = false;
   bool _isSignUpHovered = false;
 
@@ -47,39 +39,43 @@ class _LoginPageState extends State<LoginPage> {
     }
     setState(() => _isLoading = true);
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _pwController.text.trim(),
+      await _authService.signInWithEmail(
+        _emailController.text.trim(),
+        _pwController.text.trim(),
       );
+
+      // DISMISS LOGIN PAGE:
+      // Once signed in, we pop this page so AuthGate can show the HomePage.
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
     } on FirebaseAuthException catch (e) {
       _showError(_friendlyAuthError(e.code));
     } catch (e) {
-      _showError(e.toString());
+      _showError("An unexpected error occurred.");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _handleGoogleLogin() async {
     setState(() => _isLoading = true);
     try {
-      final dynamic googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        setState(() => _isLoading = false);
+      final userCredential = await _authService.signInWithGoogle();
+
+      // SUCCESSFUL GOOGLE SIGN IN:
+      if (userCredential != null) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          // Pop the login screen to reveal the HomePage managed by AuthGate
+          Navigator.of(context).pop();
+        }
         return;
       }
-      final dynamic googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-      await FirebaseAuth.instance.signInWithCredential(credential);
-    } on FirebaseAuthException catch (e) {
-      _showError(_friendlyAuthError(e.code));
     } catch (e) {
-      _showError("Google Sign-In failed: $e");
+      _showError("Google Sign-In failed. Please try again.");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -97,14 +93,17 @@ class _LoginPageState extends State<LoginPage> {
     } on FirebaseAuthException catch (e) {
       _showError(_friendlyAuthError(e.code));
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // --- UI Helpers ---
 
   String _friendlyAuthError(String code) {
     switch (code) {
       case 'user-not-found':
-        return "No account found with this email.";
+      case 'invalid-credential':
+        return "Incorrect email or password.";
       case 'wrong-password':
         return "Incorrect password. Please try again.";
       case 'invalid-email':
@@ -112,23 +111,29 @@ class _LoginPageState extends State<LoginPage> {
       case 'too-many-requests':
         return "Too many attempts. Please try again later.";
       default:
-        return "Authentication failed. Please try again.";
+        return "Authentication failed ($code).";
     }
   }
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
   void _showSuccess(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
-
-  // --- UI Components ---
 
   @override
   Widget build(BuildContext context) {
@@ -153,6 +158,7 @@ class _LoginPageState extends State<LoginPage> {
               padding: const EdgeInsets.symmetric(horizontal: 30.0),
               child: Column(
                 children: [
+                  const SizedBox(height: 20),
                   Image.asset(
                     'assets/images/logo.png',
                     height: 80,
@@ -175,20 +181,19 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 10),
                   Text(
                     "Log in to continue managing your finances.",
+                    textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: AppColors.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 30),
-
+                  const SizedBox(height: 40),
                   _buildTextField(
                     label: "Email",
                     icon: Icons.email_outlined,
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                   ),
-
                   _buildTextField(
                     label: "Password",
                     icon: Icons.lock_outline,
@@ -199,8 +204,6 @@ class _LoginPageState extends State<LoginPage> {
                       () => _isPasswordVisible = !_isPasswordVisible,
                     ),
                   ),
-
-                  // Forgot Password with Shadow Hover
                   Align(
                     alignment: Alignment.centerRight,
                     child: MouseRegion(
@@ -238,8 +241,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 25),
-
-                  // Log In Button
                   SizedBox(
                     width: double.infinity,
                     height: 55,
@@ -262,9 +263,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 15),
-
                   Row(
                     children: [
                       Expanded(child: Divider(color: Colors.grey[300])),
@@ -281,12 +280,9 @@ class _LoginPageState extends State<LoginPage> {
                       Expanded(child: Divider(color: Colors.grey[300])),
                     ],
                   ),
-
                   const SizedBox(height: 15),
                   _buildGoogleButton(),
                   const SizedBox(height: 25),
-
-                  // Sign Up Link with Shadow Hover
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -318,17 +314,6 @@ class _LoginPageState extends State<LoginPage> {
                                   ? AppColors.primary.withValues(alpha: 0.08)
                                   : Colors.transparent,
                               borderRadius: BorderRadius.circular(8),
-                              boxShadow: _isSignUpHovered
-                                  ? [
-                                      BoxShadow(
-                                        color: AppColors.primary.withValues(
-                                          alpha: 0.1,
-                                        ),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ]
-                                  : [],
                             ),
                             child: Text(
                               "Sign Up",
@@ -346,7 +331,6 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 40),
                 ],
               ),
             ),
@@ -354,7 +338,7 @@ class _LoginPageState extends State<LoginPage> {
         ),
         if (_isLoading)
           Container(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: Colors.black.withValues(alpha: 0.3),
             child: const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             ),
@@ -386,11 +370,7 @@ class _LoginPageState extends State<LoginPage> {
             color: AppColors.textSecondary,
             fontSize: 14,
           ),
-          prefixIcon: Icon(
-            icon,
-            color: enabled ? AppColors.primary : Colors.grey,
-            size: 20,
-          ),
+          prefixIcon: Icon(icon, color: AppColors.primary, size: 20),
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
@@ -402,7 +382,7 @@ class _LoginPageState extends State<LoginPage> {
                 )
               : null,
           filled: true,
-          fillColor: enabled ? Colors.grey[50] : Colors.grey[200],
+          fillColor: Colors.grey[50],
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,

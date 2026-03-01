@@ -1,8 +1,9 @@
+import 'package:cashadvance/screens/login_page.dart';
+import 'package:cashadvance/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cashadvance/theme/constants.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -13,12 +14,6 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId:
-        '149500606282-bv0krkbqdji6pps6mt8mqkfhdo4p2d1d.apps.googleusercontent.com',
-    scopes: ['email', 'https://www.googleapis.com/auth/userinfo.profile'],
-  );
-
   final _fNameController = TextEditingController();
   final _lNameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -33,7 +28,6 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
   bool _isGoogleUser = false;
 
-  // Hover state for the login link
   bool _isLoginHovered = false;
 
   @override
@@ -52,68 +46,74 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> _handleGoogleAutofill() async {
     setState(() => _isLoading = true);
     try {
-      final googleUser = await _googleSignIn.signIn();
+      final authService = AuthService();
+      // We sign out first to ensure a fresh Google picker
+      await authService.signOut();
 
-      if (googleUser == null) {
-        setState(() => _isLoading = false);
+      final userCredential = await authService.signInWithGoogle();
+
+      if (userCredential == null) {
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
-      final String displayName = googleUser.displayName ?? "";
-      List<String> nameParts = displayName.split(" ");
+      final user = userCredential.user;
+      List<String> nameParts = (user?.displayName ?? "").split(" ");
 
       setState(() {
         _fNameController.text = nameParts.first;
         _lNameController.text = nameParts.length > 1
             ? nameParts.sublist(1).join(" ")
             : "";
-        _emailController.text = googleUser.email;
-        _pwController.text = "GOOGLE_USER_EXTERNAL";
-        _confirmPwController.text = "GOOGLE_USER_EXTERNAL";
+        _emailController.text = user?.email ?? "";
+        _pwController.text = "GOOGLE_USER_AUTH";
+        _confirmPwController.text = "GOOGLE_USER_AUTH";
         _isGoogleUser = true;
         _isLoading = false;
       });
 
-      _showSuccess("Google details imported.");
+      _showSuccess(
+        "Google details imported. Please complete the remaining fields.",
+      );
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       _showError("Google Error: $e");
     }
   }
 
   Future<void> _submitRegistration() async {
+    // 1. Validation
     if (!_isGoogleUser && (_pwController.text != _confirmPwController.text)) {
       _showError("Passwords do not match!");
+      return;
+    }
+
+    if (_empIdController.text.isEmpty || _deptController.text.isEmpty) {
+      _showError("Please fill in all employee details.");
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      UserCredential userCredential;
-
+      String? uid;
       if (!_isGoogleUser) {
-        userCredential = await FirebaseAuth.instance
+        // Create new account for Email/PW users
+        UserCredential userCredential = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(
               email: _emailController.text.trim(),
               password: _pwController.text.trim(),
             );
+        uid = userCredential.user?.uid;
       } else {
-        final googleUser = await _googleSignIn.signIn();
-        final googleAuth = await googleUser?.authentication;
-
-        final AuthCredential credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth?.accessToken,
-          idToken: googleAuth?.idToken,
-        );
-
-        userCredential = await FirebaseAuth.instance.signInWithCredential(
-          credential,
-        );
+        // Use existing UID for Google users already authenticated via autofill
+        uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid == null) {
+          throw Exception("Session expired. Please re-authenticate.");
+        }
       }
 
-      final String uid = userCredential.user!.uid;
-
+      // 2. Save/Update profile in Firestore
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'firstName': _fNameController.text.trim(),
         'lastName': _lNameController.text.trim(),
@@ -123,26 +123,41 @@ class _RegisterPageState extends State<RegisterPage> {
         'position': _posController.text.trim(),
         'isAdmin': false,
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
 
-      _showSuccess("Account created successfully!");
+      _showSuccess("Registration Complete!");
+
+      // 3. AUTO-REDIRECT LOGIC
+      // Since RegisterPage was pushed from LoginPage, we need to clear both.
+      // Navigator.popUntil removes all pages until it hits the root (AuthGate).
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
     } catch (e) {
       _showError(e.toString());
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
   void _showSuccess(String msg) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -185,14 +200,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
                       color: AppColors.textMain,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    "Join us to manage your finances smarter.",
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 30),
@@ -256,7 +263,6 @@ class _RegisterPageState extends State<RegisterPage> {
                   ],
 
                   const SizedBox(height: 20),
-
                   SizedBox(
                     width: double.infinity,
                     height: 55,
@@ -287,7 +293,6 @@ class _RegisterPageState extends State<RegisterPage> {
 
                   const SizedBox(height: 25),
 
-                  // Updated Log In Link with Shadow/Hover Effects
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -314,17 +319,6 @@ class _RegisterPageState extends State<RegisterPage> {
                                   ? AppColors.primary.withValues(alpha: 0.08)
                                   : Colors.transparent,
                               borderRadius: BorderRadius.circular(8),
-                              boxShadow: _isLoginHovered
-                                  ? [
-                                      BoxShadow(
-                                        color: AppColors.primary.withValues(
-                                          alpha: 0.1,
-                                        ),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ]
-                                  : [],
                             ),
                             child: Text(
                               "Log In",
@@ -332,9 +326,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                 color: _isLoginHovered
                                     ? AppColors.primaryHover
                                     : AppColors.primary,
-                                fontWeight: _isLoginHovered
-                                    ? FontWeight.w800
-                                    : FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
