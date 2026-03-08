@@ -5,16 +5,9 @@ import 'package:flutter/foundation.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Centralize the GoogleSignIn configuration here
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: kIsWeb
-        ? '149500606282-bv0krkbqdji6pps6mt8mqkfhdo4p2d1d.apps.googleusercontent.com'
-        : null,
-    scopes: ['email', 'profile'],
-  );
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
   User? get currentUser => _auth.currentUser;
-
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   Future<UserCredential?> signInWithGoogle() async {
@@ -22,19 +15,27 @@ class AuthService {
       if (kIsWeb) {
         GoogleAuthProvider googleProvider = GoogleAuthProvider();
         googleProvider.setCustomParameters({'prompt': 'select_account'});
-
-        // Fix: Use await but don't return the result of signInWithRedirect
-        // because it returns Future<void>.
-        await _auth.signInWithRedirect(googleProvider);
-        return null;
+        return await _auth.signInWithPopup(googleProvider);
       } else {
-        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-        if (googleUser == null) return null;
+        // 1. Initialize the plugin
+        await _googleSignIn.initialize();
 
-        final GoogleSignInAuthentication googleAuth =
-            await googleUser.authentication;
+        // 2. Authenticate the user to get the account
+        final GoogleSignInAccount googleUser = await _googleSignIn
+            .authenticate();
+
+        // 3. Obtain the ID Token (Authentication)
+        final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+        // 4. Access Token is now separate. Request authorization explicitly.
+        // We use the same scopes used during initialization.
+        final List<String> scopes = ['email', 'profile'];
+        final authClient = googleUser.authorizationClient;
+        final authorization = await authClient.authorizeScopes(scopes);
+
         final AuthCredential credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
+          accessToken:
+              authorization.accessToken, // Access via the authorized client
           idToken: googleAuth.idToken,
         );
 
@@ -46,20 +47,6 @@ class AuthService {
     }
   }
 
-  /// NEW: Call this in your login page's initState to catch the user after redirect
-  Future<UserCredential?> handleRedirectResult() async {
-    if (kIsWeb) {
-      try {
-        return await _auth.getRedirectResult();
-      } catch (e) {
-        debugPrint("Error handling redirect: $e");
-        return null;
-      }
-    }
-    return null;
-  }
-
-  // Standard Email/Password Sign In
   Future<UserCredential> signInWithEmail(String email, String password) async {
     try {
       return await _auth.signInWithEmailAndPassword(
@@ -74,12 +61,10 @@ class AuthService {
 
   Future<void> signOut() async {
     try {
-      // Sign out from Google (important to clear the session so the picker shows up next time)
-      if (await _googleSignIn.isSignedIn()) {
+      await _auth.signOut();
+      if (!kIsWeb) {
         await _googleSignIn.signOut();
       }
-      // Sign out from Firebase
-      await _auth.signOut();
     } catch (e) {
       debugPrint("Sign-Out Error: $e");
     }
