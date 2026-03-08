@@ -22,29 +22,41 @@ class AuthService {
       if (kIsWeb) {
         GoogleAuthProvider googleProvider = GoogleAuthProvider();
         googleProvider.setCustomParameters({'prompt': 'select_account'});
-        return await _auth.signInWithPopup(googleProvider);
-      } else {
-        // Trigger the authentication flow
-        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-        if (googleUser == null) return null; // User canceled the picker
 
-        // Obtain the auth details from the request
+        // Fix: Use await but don't return the result of signInWithRedirect
+        // because it returns Future<void>.
+        await _auth.signInWithRedirect(googleProvider);
+        return null;
+      } else {
+        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+        if (googleUser == null) return null;
+
         final GoogleSignInAuthentication googleAuth =
             await googleUser.authentication;
-
-        // Create a new credential
         final AuthCredential credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
         );
 
-        // Once signed in, return the UserCredential
         return await _auth.signInWithCredential(credential);
       }
     } catch (e) {
       debugPrint("Google Sign-In Error: $e");
-      rethrow; // Rethrow so the UI can catch it and show a SnackBar
+      rethrow;
     }
+  }
+
+  /// NEW: Call this in your login page's initState to catch the user after redirect
+  Future<UserCredential?> handleRedirectResult() async {
+    if (kIsWeb) {
+      try {
+        return await _auth.getRedirectResult();
+      } catch (e) {
+        debugPrint("Error handling redirect: $e");
+        return null;
+      }
+    }
+    return null;
   }
 
   // Standard Email/Password Sign In
