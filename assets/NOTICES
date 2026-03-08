@@ -5342,10 +5342,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 flutter_lints
 google_identity_services_web
 google_sign_in
-google_sign_in_android
-google_sign_in_ios
 google_sign_in_platform_interface
-google_sign_in_web
 path_provider
 path_provider_linux
 path_provider_platform_interface
@@ -9888,6 +9885,9 @@ FROM,OUT OF OR IN CONNECTION WITH THE MATERIALS OR THE USE OR OTHER DEALINGS
 IN THE MATERIALS.
 --------------------------------------------------------------------------------
 google_fonts
+google_sign_in_android
+google_sign_in_ios
+google_sign_in_web
 path_provider_android
 path_provider_foundation
 
