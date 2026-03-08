@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,13 +7,23 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:cashadvance/theme/constants.dart';
 
-// New Imports for PDF and Printing
+// PDF and Printing
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
+
+  // --- HELPER: Generate 8-digit unique ID ---
+  String _generateReferenceId() {
+    const chars =
+        'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluded confusing chars like I, O, 1, 0
+    return List.generate(
+      8,
+      (index) => chars[Random().nextInt(chars.length)],
+    ).join();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +119,7 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  // --- UI BUILDERS ---
+  // --- UI: SUMMARY CARDS ---
 
   Widget _buildResponsiveSummary(String uid) {
     return StreamBuilder<QuerySnapshot>(
@@ -228,6 +239,8 @@ class HomePage extends StatelessWidget {
     );
   }
 
+  // --- UI: ADVANCE LIST ---
+
   Widget _buildSliverAdvanceList(String uid) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -273,6 +286,7 @@ class HomePage extends StatelessWidget {
     Color statusColor = status == 'Approved'
         ? Colors.green
         : (status == 'Rejected' ? Colors.redAccent : Colors.orange);
+    String refId = data['referenceId'] ?? '--------';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -282,13 +296,34 @@ class HomePage extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade100),
       ),
       child: ListTile(
-        title: Text(
-          "₱${NumberFormat('#,##0.00').format(data['amount'])}",
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "₱${NumberFormat('#,##0.00').format(data['amount'])}",
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              refId,
+              style: GoogleFonts.robotoMono(
+                fontSize: 11,
+                color: Colors.blueGrey,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              "Fund Class: ${data['fundClassification'] ?? 'N/A'}",
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.black54,
+              ),
+            ),
             Text(
               data['purpose'] ?? "No purpose",
               maxLines: 1,
@@ -324,12 +359,8 @@ class HomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            // RE-SUBMIT / EDIT BUTTON
             if (status == 'Pending' || status == 'Rejected')
               IconButton(
-                tooltip: status == 'Rejected'
-                    ? 'Resubmit as New'
-                    : 'Edit Application',
                 icon: Icon(
                   status == 'Rejected' ? Icons.refresh : Icons.edit_outlined,
                   color: Colors.blue,
@@ -342,10 +373,8 @@ class HomePage extends StatelessWidget {
                   existingData: data,
                 ),
               ),
-            // PDF ACTIONS
             if (status == 'Approved') ...[
               IconButton(
-                tooltip: 'Download PDF',
                 icon: const Icon(
                   Icons.file_download_outlined,
                   color: Colors.blue,
@@ -354,7 +383,6 @@ class HomePage extends StatelessWidget {
                 onPressed: () => _generatePDF(data, action: 'download'),
               ),
               IconButton(
-                tooltip: 'Print PDF',
                 icon: const Icon(
                   Icons.print_outlined,
                   color: Colors.green,
@@ -369,14 +397,13 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  // --- LOGIC ---
+  // --- LOGIC: PDF GENERATION ---
 
   Future<void> _generatePDF(
     Map<String, dynamic> data, {
     String action = 'print',
   }) async {
     final pdf = pw.Document();
-
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(data['userId'])
@@ -386,16 +413,8 @@ class HomePage extends StatelessWidget {
     final String employeeName =
         "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}";
     final String employeeId = userData['employeeId']?.toString() ?? "N/A";
-
-    final String position = userData['position'] ?? '';
-    final String department = userData['department'] ?? '';
-    final String positionDeptCombined =
-        (position.isNotEmpty && department.isNotEmpty)
-        ? "$position / $department"
-        : (position.isNotEmpty
-              ? position
-              : (department.isNotEmpty ? department : "N/A"));
-
+    final String refId = data['referenceId'] ?? 'N/A';
+    final String fundClass = data['fundClassification'] ?? 'N/A';
     final String dateStr = data['createdAt'] != null
         ? DateFormat(
             'MM/dd/yyyy',
@@ -415,14 +434,24 @@ class HomePage extends StatelessWidget {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Center(
-                  child: pw.Text(
-                    "CASH ADVANCE REQUEST",
-                    style: pw.TextStyle(
-                      fontSize: 16,
-                      fontWeight: pw.FontWeight.bold,
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      "CASH ADVANCE REQUEST",
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
                     ),
-                  ),
+                    pw.Text(
+                      "REF: $refId",
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                  ],
                 ),
                 pw.SizedBox(height: 20),
                 pw.Table(
@@ -434,15 +463,12 @@ class HomePage extends StatelessWidget {
                     pw.TableRow(
                       children: [
                         _pdfLabelValue("EMPLOYEE:", employeeName),
-                        _pdfLabelValue("NO:", employeeId),
+                        _pdfLabelValue("EMP NO:", employeeId),
                       ],
                     ),
                     pw.TableRow(
                       children: [
-                        _pdfLabelValue(
-                          "POSITION / DEPT:",
-                          positionDeptCombined,
-                        ),
+                        _pdfLabelValue("FUND CLASS:", fundClass),
                         _pdfLabelValue("DATE:", dateStr),
                       ],
                     ),
@@ -451,10 +477,6 @@ class HomePage extends StatelessWidget {
                 pw.SizedBox(height: 10),
                 pw.Table(
                   border: pw.TableBorder.all(color: PdfColors.black),
-                  columnWidths: {
-                    0: const pw.FlexColumnWidth(3),
-                    1: const pw.FlexColumnWidth(1),
-                  },
                   children: [
                     pw.TableRow(
                       decoration: const pw.BoxDecoration(
@@ -492,7 +514,7 @@ class HomePage extends StatelessWidget {
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
                           child: pw.Text(
-                            NumberFormat('#,##0.00').format(data['amount']),
+                            "PHP ${NumberFormat('#,##0.00').format(data['amount'])}",
                             textAlign: pw.TextAlign.right,
                           ),
                         ),
@@ -511,8 +533,6 @@ class HomePage extends StatelessWidget {
                     _pdfSignatureBlock("Checked by:", "Department Head"),
                   ],
                 ),
-                pw.SizedBox(height: 30),
-                _pdfSignatureBlock("Released by:", ""),
               ],
             ),
           );
@@ -527,10 +547,231 @@ class HomePage extends StatelessWidget {
     } else {
       await Printing.sharePdf(
         bytes: await pdf.save(),
-        filename: 'Cash_Advance_$dateStr.pdf',
+        filename: 'Advance_$refId.pdf',
       );
     }
   }
+
+  // --- UI: FORM MODAL ---
+
+  void _showApplyPopup(
+    BuildContext context,
+    String uid, {
+    String? editDocId,
+    Map<String, dynamic>? existingData,
+  }) async {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    final userData = userDoc.data() ?? {};
+
+    final amountController = TextEditingController(
+      text: existingData != null ? existingData['amount'].toString() : "",
+    );
+    final purposeController = TextEditingController(
+      text: existingData != null ? existingData['purpose'] : "",
+    );
+
+    // Default Dropdown value
+    String selectedFundClass = existingData?['fundClassification'] ?? '1';
+
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 20,
+            right: 20,
+            top: 20,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  editDocId == null ? "Apply for Advance" : "Edit Request",
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (existingData?['referenceId'] != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      "Reference: ${existingData!['referenceId']}",
+                      style: const TextStyle(
+                        color: Colors.blueGrey,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 15),
+                _infoRow(
+                  "Employee",
+                  "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}",
+                ),
+                const SizedBox(height: 15),
+
+                // NEW: Fund Classification Dropdown
+                DropdownButtonFormField<String>(
+                  initialValue: selectedFundClass,
+                  decoration: _inputStyle("Fund Classification"),
+                  items: ['1', '2', '3']
+                      .map(
+                        (val) => DropdownMenuItem(
+                          value: val,
+                          child: Text("Fund Class $val"),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (val) =>
+                      setModalState(() => selectedFundClass = val!),
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: _inputStyle("Amount (₱)"),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: purposeController,
+                  maxLines: 2,
+                  decoration: _inputStyle("Purpose"),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => _submit(
+                      context,
+                      uid,
+                      amountController.text,
+                      purposeController.text,
+                      selectedFundClass,
+                      editDocId: editDocId,
+                      existingStatus: existingData?['status'],
+                    ),
+                    child: const Text(
+                      "Submit",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- LOGIC: SUBMISSION ---
+
+  Future<void> _submit(
+    BuildContext context,
+    String uid,
+    String amount,
+    String purpose,
+    String fundClass, {
+    String? editDocId,
+    String? existingStatus,
+  }) async {
+    if (amount.isEmpty || purpose.isEmpty) return;
+
+    final data = {
+      'userId': uid,
+      'amount': double.tryParse(amount) ?? 0,
+      'purpose': purpose,
+      'fundClassification': fundClass,
+      'status': 'Pending',
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (editDocId == null || existingStatus == 'Rejected') {
+      data['createdAt'] = FieldValue.serverTimestamp();
+      data['referenceId'] = _generateReferenceId(); // Assign unique ID
+      await FirebaseFirestore.instance.collection('advances').add(data);
+    } else {
+      await FirebaseFirestore.instance
+          .collection('advances')
+          .doc(editDocId)
+          .update(data);
+    }
+
+    if (context.mounted) Navigator.pop(context);
+  }
+
+  // --- SHARED UI HELPERS ---
+
+  Widget _buildEmptyState() {
+    return Column(
+      children: [
+        const SizedBox(height: 50),
+        Icon(Icons.receipt_long_outlined, size: 60, color: Colors.grey[300]),
+        const SizedBox(height: 10),
+        Text(
+          "No applications found.",
+          style: GoogleFonts.inter(color: Colors.grey),
+        ),
+      ],
+    );
+  }
+
+  Widget _infoRow(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 4.0),
+    child: Text(
+      "$label: $value",
+      style: const TextStyle(fontSize: 12, color: Colors.grey),
+    ),
+  );
+
+  InputDecoration _inputStyle(String label) => InputDecoration(
+    labelText: label,
+    filled: true,
+    fillColor: Colors.grey[100],
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+  );
 
   pw.Widget _pdfLabelValue(String label, String value) {
     return pw.Padding(
@@ -572,201 +813,6 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  void _showApplyPopup(
-    BuildContext context,
-    String uid, {
-    String? editDocId,
-    Map<String, dynamic>? existingData,
-  }) async {
-    // Show a quick loading indicator if we are fetching user data
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .get();
-    final userData = userDoc.data() ?? {};
-
-    final amountController = TextEditingController(
-      text: existingData != null ? existingData['amount'].toString() : "",
-    );
-    final purposeController = TextEditingController(
-      text: existingData != null ? existingData['purpose'] : "",
-    );
-
-    if (!context.mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 20,
-          right: 20,
-          top: 20,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                editDocId == null
-                    ? "Apply for Advance"
-                    : (existingData?['status'] == 'Rejected'
-                          ? "Resubmit Application"
-                          : "Edit Request"),
-                style: GoogleFonts.inter(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 15),
-              _infoRow(
-                "Employee",
-                "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}",
-              ),
-              _infoRow(
-                "ID / Dept",
-                "${userData['employeeId'] ?? ''} | ${userData['department'] ?? ''}",
-              ),
-              const SizedBox(height: 15),
-              TextField(
-                controller: amountController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: _inputStyle("Amount (₱)"),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: purposeController,
-                maxLines: 2,
-                decoration: _inputStyle("Purpose"),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onPressed: () => _submit(
-                    context,
-                    uid,
-                    amountController.text,
-                    purposeController.text,
-                    editDocId: editDocId,
-                    existingStatus: existingData?['status'],
-                  ),
-                  child: Text(
-                    editDocId == null
-                        ? "Submit"
-                        : (existingData?['status'] == 'Rejected'
-                              ? "Submit as New"
-                              : "Update Request"),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _submit(
-    BuildContext context,
-    String uid,
-    String amount,
-    String purpose, {
-    String? editDocId,
-    String? existingStatus,
-  }) async {
-    if (amount.isEmpty || purpose.isEmpty) return;
-
-    final data = {
-      'userId': uid,
-      'amount': double.tryParse(amount) ?? 0,
-      'purpose': purpose,
-      'status': 'Pending',
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    // LOGIC: If it's a new app OR the previous one was REJECTED, create a NEW document.
-    if (editDocId == null || existingStatus == 'Rejected') {
-      data['createdAt'] = FieldValue.serverTimestamp();
-      if (existingStatus == 'Rejected') {
-        data['resubmittedFrom'] = editDocId as Object; // Optional: track history
-      }
-      await FirebaseFirestore.instance.collection('advances').add(data);
-    } else {
-      // Otherwise, update the existing document (only for Pending items)
-      await FirebaseFirestore.instance
-          .collection('advances')
-          .doc(editDocId)
-          .update(data);
-    }
-
-    if (context.mounted) Navigator.pop(context);
-  }
-
-  Widget _buildEmptyState() {
-    return Column(
-      children: [
-        const SizedBox(height: 50),
-        Icon(Icons.receipt_long_outlined, size: 60, color: Colors.grey[300]),
-        const SizedBox(height: 10),
-        Text(
-          "No applications found.",
-          style: GoogleFonts.inter(color: Colors.grey),
-        ),
-      ],
-    );
-  }
-
-  Widget _infoRow(String label, String value) => Padding(
-    padding: const EdgeInsets.only(bottom: 4.0),
-    child: Text(
-      "$label: $value",
-      style: const TextStyle(fontSize: 12, color: Colors.grey),
-    ),
-  );
-
-  InputDecoration _inputStyle(String label) => InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: Colors.grey[100],
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    ),
-  );
-
   List<PopupMenuEntry<String>> _buildMenuItems(String uid) {
     return [
       PopupMenuItem(
@@ -774,10 +820,9 @@ class HomePage extends StatelessWidget {
         child: FutureBuilder<DocumentSnapshot>(
           future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
           builder: (context, snapshot) {
-            String name = "User";
-            if (snapshot.hasData && snapshot.data!.exists) {
-              name = snapshot.data!['firstName'] ?? "User";
-            }
+            String name = snapshot.hasData
+                ? (snapshot.data!['firstName'] ?? "User")
+                : "User";
             return Text(
               "Hi, $name",
               style: const TextStyle(
