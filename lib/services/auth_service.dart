@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // Use the .instance getter for the GoogleSignIn plugin
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
   User? get currentUser => _auth.currentUser;
@@ -14,9 +15,19 @@ class AuthService {
     try {
       if (kIsWeb) {
         GoogleAuthProvider googleProvider = GoogleAuthProvider();
+
+        // Ensures the user is asked to select their account every time
         googleProvider.setCustomParameters({'prompt': 'select_account'});
-        return await _auth.signInWithPopup(googleProvider);
+
+        // FIX: Switch to Redirect to bypass the COOP "window.closed" block
+        // Execution will stop here as the browser navigates to Google
+        await _auth.signInWithRedirect(googleProvider);
+
+        // Because of the redirect, this return is technically never reached
+        // until the app reloads and the AuthGate takes over.
+        return null;
       } else {
+        // Mobile Logic (Android/iOS)
         // 1. Initialize the plugin
         await _googleSignIn.initialize();
 
@@ -24,18 +35,16 @@ class AuthService {
         final GoogleSignInAccount googleUser = await _googleSignIn
             .authenticate();
 
-        // 3. Obtain the ID Token (Authentication)
+        // 3. Obtain the ID Token
         final GoogleSignInAuthentication googleAuth = googleUser.authentication;
 
-        // 4. Access Token is now separate. Request authorization explicitly.
-        // We use the same scopes used during initialization.
+        // 4. Handle Access Token authorization explicitly
         final List<String> scopes = ['email', 'profile'];
         final authClient = googleUser.authorizationClient;
         final authorization = await authClient.authorizeScopes(scopes);
 
         final AuthCredential credential = GoogleAuthProvider.credential(
-          accessToken:
-              authorization.accessToken, // Access via the authorized client
+          accessToken: authorization.accessToken,
           idToken: googleAuth.idToken,
         );
 
@@ -62,6 +71,8 @@ class AuthService {
   Future<void> signOut() async {
     try {
       await _auth.signOut();
+      // On Web, GoogleSignIn.signOut is often unnecessary with Redirect flow,
+      // but we keep the platform check for safety.
       if (!kIsWeb) {
         await _googleSignIn.signOut();
       }

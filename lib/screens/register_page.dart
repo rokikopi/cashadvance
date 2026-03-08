@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cashadvance/theme/constants.dart';
+import 'package:flutter/foundation.dart'; // Required for kIsWeb
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -27,8 +28,51 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
   bool _isGoogleUser = false;
-
   bool _isLoginHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // For Web: Check if we just returned from a Google Redirect autofill
+    if (kIsWeb) {
+      _checkRedirectResult();
+    }
+  }
+
+  /// Listens for the result of a Google Redirect login upon page initialization
+  Future<void> _checkRedirectResult() async {
+    try {
+      final UserCredential userCredential = await FirebaseAuth.instance
+          .getRedirectResult();
+
+      if (userCredential.user != null) {
+        _applyGoogleData(userCredential.user!);
+      }
+    } catch (e) {
+      debugPrint("Registration Redirect Result Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Helper to extract data from User object and fill controllers
+  void _applyGoogleData(User user) {
+    List<String> nameParts = (user.displayName ?? "").split(" ");
+    setState(() {
+      _fNameController.text = nameParts.first;
+      _lNameController.text = nameParts.length > 1
+          ? nameParts.sublist(1).join(" ")
+          : "";
+      _emailController.text = user.email ?? "";
+      _pwController.text = "GOOGLE_USER_AUTH";
+      _confirmPwController.text = "GOOGLE_USER_AUTH";
+      _isGoogleUser = true;
+    });
+
+    _showSuccess(
+      "Google details imported. Please complete the remaining fields.",
+    );
+  }
 
   @override
   void dispose() {
@@ -47,34 +91,13 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => _isLoading = true);
     try {
       final authService = AuthService();
-      // We sign out first to ensure a fresh Google picker
-      await authService.signOut();
-
+      // On Web, this triggers a redirect. On Mobile, it returns the credential.
       final userCredential = await authService.signInWithGoogle();
 
-      if (userCredential == null) {
-        if (mounted) setState(() => _isLoading = false);
-        return;
+      if (userCredential != null) {
+        _applyGoogleData(userCredential.user!);
       }
-
-      final user = userCredential.user;
-      List<String> nameParts = (user?.displayName ?? "").split(" ");
-
-      setState(() {
-        _fNameController.text = nameParts.first;
-        _lNameController.text = nameParts.length > 1
-            ? nameParts.sublist(1).join(" ")
-            : "";
-        _emailController.text = user?.email ?? "";
-        _pwController.text = "GOOGLE_USER_AUTH";
-        _confirmPwController.text = "GOOGLE_USER_AUTH";
-        _isGoogleUser = true;
-        _isLoading = false;
-      });
-
-      _showSuccess(
-        "Google details imported. Please complete the remaining fields.",
-      );
+      // If web redirect happens, execution stops here.
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
       _showError("Google Error: $e");
@@ -98,7 +121,6 @@ class _RegisterPageState extends State<RegisterPage> {
     try {
       String? uid;
       if (!_isGoogleUser) {
-        // Create new account for Email/PW users
         UserCredential userCredential = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(
               email: _emailController.text.trim(),
@@ -106,7 +128,6 @@ class _RegisterPageState extends State<RegisterPage> {
             );
         uid = userCredential.user?.uid;
       } else {
-        // Use existing UID for Google users already authenticated via autofill
         uid = FirebaseAuth.instance.currentUser?.uid;
         if (uid == null) {
           throw Exception("Session expired. Please re-authenticate.");
@@ -127,8 +148,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
       _showSuccess("Registration Complete!");
 
-      // 3. AUTO-REDIRECT LOGIC
       if (mounted) {
+        // Return to the first screen (usually AuthGate) to trigger the home redirect
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
@@ -138,6 +159,7 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  // --- UI Helpers ---
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -201,7 +223,6 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                   ),
                   const SizedBox(height: 30),
-
                   _buildTextField(
                     label: "First Name",
                     icon: Icons.person_outline,
@@ -235,7 +256,6 @@ class _RegisterPageState extends State<RegisterPage> {
                     icon: Icons.work_outline,
                     controller: _posController,
                   ),
-
                   if (!_isGoogleUser) ...[
                     _buildTextField(
                       label: "Password",
@@ -259,7 +279,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     ),
                   ],
-
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
@@ -283,14 +302,11 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     ),
                   ),
-
                   if (!_isGoogleUser) ...[
                     const SizedBox(height: 15),
                     _buildGoogleButton(),
                   ],
-
                   const SizedBox(height: 25),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
