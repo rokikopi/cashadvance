@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Use the .instance getter for the GoogleSignIn plugin
-  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  // Stable constructor for version 6.2.1
+  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
 
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -14,37 +14,28 @@ class AuthService {
   Future<UserCredential?> signInWithGoogle() async {
     try {
       if (kIsWeb) {
+        // --- WEB POPUP LOGIC ---
         GoogleAuthProvider googleProvider = GoogleAuthProvider();
 
-        // Ensures the user is asked to select their account every time
+        // select_account ensures the popup doesn't just "flash" and disappear
         googleProvider.setCustomParameters({'prompt': 'select_account'});
 
-        // FIX: Switch to Redirect to bypass the COOP "window.closed" block
-        // Execution will stop here as the browser navigates to Google
-        await _auth.signInWithRedirect(googleProvider);
+        // Ensure persistence is local so the session stays after closing the tab
+        await _auth.setPersistence(Persistence.LOCAL);
 
-        // Because of the redirect, this return is technically never reached
-        // until the app reloads and the AuthGate takes over.
-        return null;
+        // This opens the separate window.
+        // Execution waits here until the popup is closed or finished.
+        return await _auth.signInWithPopup(googleProvider);
       } else {
-        // Mobile Logic (Android/iOS)
-        // 1. Initialize the plugin
-        await _googleSignIn.initialize();
+        // --- MOBILE LOGIC ---
+        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+        if (googleUser == null) return null;
 
-        // 2. Authenticate the user to get the account
-        final GoogleSignInAccount googleUser = await _googleSignIn
-            .authenticate();
-
-        // 3. Obtain the ID Token
-        final GoogleSignInAuthentication googleAuth = googleUser.authentication;
-
-        // 4. Handle Access Token authorization explicitly
-        final List<String> scopes = ['email', 'profile'];
-        final authClient = googleUser.authorizationClient;
-        final authorization = await authClient.authorizeScopes(scopes);
+        final GoogleSignInAuthentication googleAuth =
+            await googleUser.authentication;
 
         final AuthCredential credential = GoogleAuthProvider.credential(
-          accessToken: authorization.accessToken,
+          accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
         );
 
@@ -52,6 +43,7 @@ class AuthService {
       }
     } catch (e) {
       debugPrint("Google Sign-In Error: $e");
+      // If you see "cross-origin-opener-policy", it's a browser header issue
       rethrow;
     }
   }
@@ -71,8 +63,6 @@ class AuthService {
   Future<void> signOut() async {
     try {
       await _auth.signOut();
-      // On Web, GoogleSignIn.signOut is often unnecessary with Redirect flow,
-      // but we keep the platform check for safety.
       if (!kIsWeb) {
         await _googleSignIn.signOut();
       }

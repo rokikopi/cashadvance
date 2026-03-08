@@ -5,9 +5,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cashadvance/theme/constants.dart';
 import 'package:cashadvance/screens/register_page.dart';
-import 'package:cashadvance/screens/home_page.dart'; // Ensure this is imported
+import 'package:cashadvance/screens/home_page.dart';
 import 'package:cashadvance/screens/admin_page.dart';
-import 'package:flutter/foundation.dart'; // Required for kIsWeb check
+import 'package:flutter/foundation.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -29,13 +29,11 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    // For Web: Check if we just returned from a Google Redirect login
     if (kIsWeb) {
       _checkRedirectResult();
     }
   }
 
-  /// Listens for the result of a Google Redirect login upon page initialization
   Future<void> _checkRedirectResult() async {
     try {
       final UserCredential userCredential = await FirebaseAuth.instance
@@ -59,8 +57,6 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  // --- Auth & Routing Logic ---
-
   Future<void> _routeUser(User user) async {
     try {
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
@@ -69,22 +65,24 @@ class _LoginPageState extends State<LoginPage> {
           .get();
 
       if (mounted) {
-        bool isAdmin = false;
         if (userDoc.exists) {
           final data = userDoc.data() as Map<String, dynamic>;
-          isAdmin = data['isAdmin'] ?? false;
-        }
+          bool isAdmin = data['isAdmin'] ?? false;
 
-        if (isAdmin) {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const AdminPage()),
+            MaterialPageRoute(
+              builder: (context) =>
+                  isAdmin ? const AdminPage() : const HomePage(),
+            ),
             (route) => false,
           );
         } else {
-          // Navigate to HomePage and clear stack
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const HomePage()),
-            (route) => false,
+          // Navigates to RegisterPage and passes the user data
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => RegisterPage(socialUser: user),
+            ),
           );
         }
       }
@@ -121,17 +119,13 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _handleGoogleLogin() async {
     setState(() => _isLoading = true);
     try {
-      // On Web, this triggers a page redirect
       final userCredential = await _authService.signInWithGoogle();
-
-      // On Mobile, execution continues here. On Web, the page reloads.
       if (userCredential?.user != null) {
         await _routeUser(userCredential!.user!);
       }
     } catch (e) {
       _showError("Google Sign-In failed. Please try again.");
     } finally {
-      // Only set loading to false if we didn't redirect away
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -153,8 +147,6 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
-  // --- UI Helpers ---
 
   String _friendlyAuthError(String code) {
     switch (code) {

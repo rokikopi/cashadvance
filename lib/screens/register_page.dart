@@ -5,10 +5,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cashadvance/theme/constants.dart';
-import 'package:flutter/foundation.dart'; // Required for kIsWeb
+import 'package:flutter/foundation.dart';
 
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+  final User? socialUser; // Added to accept data from Login
+  const RegisterPage({super.key, this.socialUser});
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -33,13 +34,20 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   void initState() {
     super.initState();
-    // For Web: Check if we just returned from a Google Redirect autofill
+
+    // 1. Check if we arrived here from Login with a socialUser
+    if (widget.socialUser != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _applyGoogleData(widget.socialUser!);
+      });
+    }
+
+    // 2. Check for Web Redirect (if they clicked "Continue with Google" directly on this page)
     if (kIsWeb) {
       _checkRedirectResult();
     }
   }
 
-  /// Listens for the result of a Google Redirect login upon page initialization
   Future<void> _checkRedirectResult() async {
     try {
       final UserCredential userCredential = await FirebaseAuth.instance
@@ -49,13 +57,12 @@ class _RegisterPageState extends State<RegisterPage> {
         _applyGoogleData(userCredential.user!);
       }
     } catch (e) {
-      debugPrint("Registration Redirect Result Error: $e");
+      debugPrint("Registration Redirect Error: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// Helper to extract data from User object and fill controllers
   void _applyGoogleData(User user) {
     List<String> nameParts = (user.displayName ?? "").split(" ");
     setState(() {
@@ -69,9 +76,7 @@ class _RegisterPageState extends State<RegisterPage> {
       _isGoogleUser = true;
     });
 
-    _showSuccess(
-      "Google details imported. Please complete the remaining fields.",
-    );
+    _showSuccess("Google account linked. Please provide employee details.");
   }
 
   @override
@@ -91,13 +96,11 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => _isLoading = true);
     try {
       final authService = AuthService();
-      // On Web, this triggers a redirect. On Mobile, it returns the credential.
       final userCredential = await authService.signInWithGoogle();
 
       if (userCredential != null) {
         _applyGoogleData(userCredential.user!);
       }
-      // If web redirect happens, execution stops here.
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
       _showError("Google Error: $e");
@@ -105,7 +108,6 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _submitRegistration() async {
-    // 1. Validation
     if (!_isGoogleUser && (_pwController.text != _confirmPwController.text)) {
       _showError("Passwords do not match!");
       return;
@@ -134,7 +136,6 @@ class _RegisterPageState extends State<RegisterPage> {
         }
       }
 
-      // 2. Save/Update profile in Firestore
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'firstName': _fNameController.text.trim(),
         'lastName': _lNameController.text.trim(),
@@ -149,7 +150,6 @@ class _RegisterPageState extends State<RegisterPage> {
       _showSuccess("Registration Complete!");
 
       if (mounted) {
-        // Return to the first screen (usually AuthGate) to trigger the home redirect
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
@@ -159,7 +159,6 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  // --- UI Helpers ---
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -322,7 +321,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
                           onTap: () {
-                            Navigator.push(
+                            Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => const LoginPage(),

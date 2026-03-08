@@ -57,7 +57,7 @@ class DefaultFirebaseOptions {
     appId: '1:149500606282:web:e72945db02c01572ec73b3',
     messagingSenderId: '149500606282',
     projectId: 'citystate-cash-advance',
-    authDomain: 'citystate-cash-advance.firebaseapp.com',
+    authDomain: 'citystate-cash-advance.web.app',
     storageBucket: 'citystate-cash-advance.firebasestorage.app',
     measurementId: 'G-D9L5TJG84Q',
   );
