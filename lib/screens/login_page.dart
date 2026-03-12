@@ -1,4 +1,5 @@
 import 'package:cashadvance/screens/home_page.dart';
+import 'package:cashadvance/screens/splash_page.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -169,7 +170,7 @@ class _LoginPageState extends State<LoginPage> {
               onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => HomePage(),
+              builder: (context) => SplashPage(),
             ),
           ),
             ),
