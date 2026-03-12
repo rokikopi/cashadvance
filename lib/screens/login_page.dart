@@ -1,4 +1,3 @@
-import 'package:cashadvance/screens/home_page.dart';
 import 'package:cashadvance/screens/splash_page.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:flutter/material.dart';
@@ -28,7 +27,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    // On Web, check if we are returning from a redirect sign-in
     if (kIsWeb) {
       _checkRedirectResult();
     }
@@ -40,10 +38,10 @@ class _LoginPageState extends State<LoginPage> {
           .getRedirectResult();
 
       if (userCredential.user != null) {
-        // No manual routing needed. AuthGate in main.dart will handle it.
         debugPrint(
           "Redirect sign-in successful for: ${userCredential.user!.email}",
         );
+        // Navigation is handled by the AuthGate listener in main.dart
       }
     } catch (e) {
       debugPrint("Redirect Result Error: $e");
@@ -56,11 +54,6 @@ class _LoginPageState extends State<LoginPage> {
     _pwController.dispose();
     super.dispose();
   }
-
-  /// FIX: Removed _routeUser method.
-  /// The StreamBuilder in main.dart (AuthGate) is the "Source of Truth".
-  /// As soon as _authService.signIn... completes, the Stream fires
-  /// and main.dart decides where to go.
 
   Future<void> _handleEmailLogin() async {
     if (_emailController.text.trim().isEmpty ||
@@ -75,7 +68,14 @@ class _LoginPageState extends State<LoginPage> {
         _emailController.text.trim(),
         _pwController.text.trim(),
       );
-      // Success! AuthGate in main.dart will now take over.
+
+      if (mounted) {
+        // Clear stack and go to Splash/AuthGate to confirm session
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const SplashPage()),
+          (route) => false,
+        );
+      }
     } on FirebaseAuthException catch (e) {
       if (mounted) _showError(_friendlyAuthError(e.code));
     } catch (e) {
@@ -89,7 +89,12 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
     try {
       await _authService.signInWithGoogle();
-      // Success! AuthGate in main.dart will now take over.
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const SplashPage()),
+          (route) => false,
+        );
+      }
     } catch (e) {
       debugPrint("Google Login Error: $e");
       if (mounted) _showError("Google Sign-In failed. Please try again.");
@@ -168,11 +173,9 @@ class _LoginPageState extends State<LoginPage> {
                 size: 20,
               ),
               onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => SplashPage(),
-            ),
-          ),
+                context,
+                MaterialPageRoute(builder: (context) => SplashPage()),
+              ),
             ),
           ),
           body: SafeArea(
@@ -343,9 +346,7 @@ class _LoginPageState extends State<LoginPage> {
                                 color: _isSignUpHovered
                                     ? AppColors.primaryHover
                                     : AppColors.primary,
-                                fontWeight: _isSignUpHovered
-                                    ? FontWeight.w800
-                                    : FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),

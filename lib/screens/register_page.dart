@@ -1,4 +1,3 @@
-import 'package:cashadvance/screens/home_page.dart';
 import 'package:cashadvance/screens/login_page.dart';
 import 'package:cashadvance/screens/splash_page.dart';
 import 'package:cashadvance/services/auth_service.dart';
@@ -10,7 +9,7 @@ import 'package:cashadvance/theme/constants.dart';
 import 'package:flutter/foundation.dart';
 
 class RegisterPage extends StatefulWidget {
-  final User? socialUser; // Added to accept data from Login
+  final User? socialUser;
   const RegisterPage({super.key, this.socialUser});
 
   @override
@@ -31,20 +30,16 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
   bool _isGoogleUser = false;
-  bool _isLoginHovered = false;
+  bool _isLoginHovered = false; // Hover state restored
 
   @override
   void initState() {
     super.initState();
-
-    // 1. Check if we arrived here from Login with a socialUser
     if (widget.socialUser != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _applyGoogleData(widget.socialUser!);
       });
     }
-
-    // 2. Check for Web Redirect (if they clicked "Continue with Google" directly on this page)
     if (kIsWeb) {
       _checkRedirectResult();
     }
@@ -54,7 +49,6 @@ class _RegisterPageState extends State<RegisterPage> {
     try {
       final UserCredential userCredential = await FirebaseAuth.instance
           .getRedirectResult();
-
       if (userCredential.user != null) {
         _applyGoogleData(userCredential.user!);
       }
@@ -77,7 +71,6 @@ class _RegisterPageState extends State<RegisterPage> {
       _confirmPwController.text = "GOOGLE_USER_AUTH";
       _isGoogleUser = true;
     });
-
     _showSuccess("Google account linked. Please provide employee details.");
   }
 
@@ -99,7 +92,6 @@ class _RegisterPageState extends State<RegisterPage> {
     try {
       final authService = AuthService();
       final userCredential = await authService.signInWithGoogle();
-
       if (userCredential != null) {
         _applyGoogleData(userCredential.user!);
       }
@@ -110,12 +102,17 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _submitRegistration() async {
+    if (_fNameController.text.trim().isEmpty ||
+        _lNameController.text.trim().isEmpty) {
+      _showError("Please enter your full name.");
+      return;
+    }
     if (!_isGoogleUser && (_pwController.text != _confirmPwController.text)) {
       _showError("Passwords do not match!");
       return;
     }
-
-    if (_empIdController.text.isEmpty || _deptController.text.isEmpty) {
+    if (_empIdController.text.trim().isEmpty ||
+        _deptController.text.trim().isEmpty) {
       _showError("Please fill in all employee details.");
       return;
     }
@@ -139,6 +136,7 @@ class _RegisterPageState extends State<RegisterPage> {
       }
 
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'uid': uid,
         'firstName': _fNameController.text.trim(),
         'lastName': _lNameController.text.trim(),
         'email': _emailController.text.trim(),
@@ -147,12 +145,16 @@ class _RegisterPageState extends State<RegisterPage> {
         'position': _posController.text.trim(),
         'isAdmin': false,
         'createdAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        'lastLogin': FieldValue.serverTimestamp(),
+      });
 
       _showSuccess("Registration Complete!");
 
       if (mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const SplashPage()),
+          (route) => false,
+        );
       }
     } catch (e) {
       _showError(e.toString());
@@ -197,11 +199,9 @@ class _RegisterPageState extends State<RegisterPage> {
                 size: 20,
               ),
               onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => SplashPage(),
-            ),
-          ),
+                context,
+                MaterialPageRoute(builder: (context) => SplashPage()),
+              ),
             ),
           ),
           body: SafeArea(
@@ -313,6 +313,8 @@ class _RegisterPageState extends State<RegisterPage> {
                     _buildGoogleButton(),
                   ],
                   const SizedBox(height: 25),
+
+                  // --- HOVER LOGIC RESTORED HERE ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

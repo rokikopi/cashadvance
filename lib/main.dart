@@ -35,7 +35,6 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E5BFF)),
         useMaterial3: true,
       ),
-      // Use initialRoute and routes for clean navigation
       initialRoute: '/',
       routes: {
         '/': (context) => const AuthGate(),
@@ -55,19 +54,17 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: authService.authStateChanges,
       builder: (context, snapshot) {
-        // If snapshot is still connecting, show loader
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // If user is logged in, move to Role Check
+        // If user is logged in, pass the User object to the Role Gate
         if (snapshot.hasData && snapshot.data != null) {
-          return UserRoleGate(uid: snapshot.data!.uid);
+          return UserRoleGate(user: snapshot.data!);
         }
 
-        // If logged out, go to Splash/Login
         return const SplashPage();
       },
     );
@@ -75,32 +72,27 @@ class AuthGate extends StatelessWidget {
 }
 
 class UserRoleGate extends StatelessWidget {
-  final String uid;
-  const UserRoleGate({super.key, required this.uid});
+  final User user; // Changed from String uid to full User object
+  const UserRoleGate({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
-      // Key fix: If the stream encounters an error (like permission denied on logout),
-      // we gracefully return to the login screen instead of hanging.
       stream: FirebaseFirestore.instance
           .collection('users')
-          .doc(uid)
+          .doc(user.uid)
           .snapshots(),
       builder: (context, snapshot) {
-        // 1. Check for errors (Permission Denied happens here during logout)
         if (snapshot.hasError) {
           return const SplashPage();
         }
 
-        // 2. Loading state for Firestore data
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // 3. User Document Exists
         if (snapshot.hasData &&
             snapshot.data != null &&
             snapshot.data!.exists) {
@@ -110,8 +102,9 @@ class UserRoleGate extends StatelessWidget {
           return isAdmin ? const AdminPage() : const HomePage();
         }
 
-        // 4. Handle account initialization (No doc found)
-        return const RegisterPage();
+        // FIX: If no document exists, send them to RegisterPage
+        // with their social account details for autofill.
+        return RegisterPage(socialUser: user);
       },
     );
   }
