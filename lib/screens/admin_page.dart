@@ -172,7 +172,7 @@ class AdminPage extends StatelessWidget {
     );
   }
 
-  // --- APPLICATIONS SECTION (UPDATED) ---
+  // --- APPLICATIONS SECTION ---
 
   Widget _buildApplicationsSection(BuildContext context, String statusFilter) {
     return StreamBuilder<QuerySnapshot>(
@@ -211,6 +211,9 @@ class AdminPage extends StatelessWidget {
     Map<String, dynamic> data,
     String status,
   ) {
+    // Determine Fund Class display from integer field
+    final String fundClass = "Class ${data['fundClassification'] ?? '1'}";
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -225,26 +228,49 @@ class AdminPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Display Reference ID
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    "REF: ${data['referenceId'] ?? 'N/A'}",
-                    style: GoogleFonts.robotoMono(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[700],
+                // Display Reference ID and Fund Classification
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        "REF: ${data['referenceId'] ?? 'N/A'}",
+                        style: GoogleFonts.robotoMono(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[700],
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        fundClass,
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 FutureBuilder<DocumentSnapshot>(
                   future: FirebaseFirestore.instance
                       .collection('users')
@@ -276,7 +302,7 @@ class AdminPage extends StatelessWidget {
               ],
             ),
           ),
-          // Actions: Only show approve/reject buttons if the status is currently Pending
+          // Actions
           if (status == "Pending") ...[
             IconButton(
               icon: const Icon(
@@ -291,7 +317,6 @@ class AdminPage extends StatelessWidget {
               onPressed: () => _confirmAction(context, docId, "Rejected"),
             ),
           ] else ...[
-            // For Approved/Rejected, show a simple status icon
             Icon(
               status == "Approved" ? Icons.verified : Icons.error_outline,
               color: status == "Approved" ? Colors.green : Colors.redAccent,

@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:math';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,7 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:cashadvance/theme/constants.dart';
 
-// PDF and Printing
+// New Imports for PDF and Printing
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -31,137 +30,97 @@ class HomePage extends StatelessWidget {
     final AuthService authService = AuthService();
     final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .snapshots(),
-      builder: (context, userSnapshot) {
-        String userName = "User";
-        if (userSnapshot.hasData && userSnapshot.data!.exists) {
-          final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-          userName = userData['firstName'] ?? "User";
-        }
-
-        return Scaffold(
-          backgroundColor: const Color(0xFFF8F9FA),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => _showApplyPopup(context, uid),
-            backgroundColor: AppColors.primary,
-            elevation: 4,
-            child: const Icon(Icons.add, color: Colors.white, size: 30),
-          ),
-          body: RefreshIndicator(
-            onRefresh: () async {
-              await Future.delayed(const Duration(milliseconds: 500));
-            },
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverAppBar(
-                  backgroundColor: Colors.white,
-                  elevation: 0,
-                  pinned: true,
-                  centerTitle: true,
-                  toolbarHeight: 90,
-                  expandedHeight: 110,
-                  title: Padding(
-                    padding: const EdgeInsets.only(top: 15.0),
-                    child: Image.asset(
-                      'assets/images/logo.png',
-                      height: 65,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => const Icon(
-                        Icons.account_balance_wallet,
-                        color: AppColors.primary,
-                        size: 40,
-                      ),
-                    ),
-                  ),
-                  actions: [
-                    Align(
-                      alignment: Alignment.topRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 8.0, right: 8.0),
-                        child: PopupMenuButton<String>(
-                          icon: const Icon(
-                            Icons.menu,
-                            color: AppColors.textMain,
-                            size: 28,
-                          ),
-                          offset: const Offset(0, 50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          onSelected: (value) async {
-                            if (value == 'logout') await authService.signOut();
-                          },
-                          itemBuilder: (context) => _buildMenuItems(userName),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: _buildResponsiveSummary(uid),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showApplyPopup(context, uid),
+        backgroundColor: AppColors.primary,
+        elevation: 4,
+        child: const Icon(Icons.add, color: Colors.white, size: 30),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await Future.delayed(const Duration(milliseconds: 500));
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverAppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              pinned: true,
+              centerTitle: true,
+              toolbarHeight: 90,
+              expandedHeight: 110,
+              title: Padding(
+                padding: const EdgeInsets.only(top: 15.0),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  height: 65,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.account_balance_wallet,
+                    color: AppColors.primary,
+                    size: 40,
                   ),
                 ),
-                SliverToBoxAdapter(
+              ),
+              actions: [
+                Align(
+                  alignment: Alignment.topRight,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18.0,
-                      vertical: 8.0,
-                    ),
-                    child: Text(
-                      "Recent Activity",
-                      style: GoogleFonts.inter(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                    padding: const EdgeInsets.only(top: 8.0, right: 8.0),
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(
+                        Icons.menu,
                         color: AppColors.textMain,
+                        size: 28,
                       ),
+                      offset: const Offset(0, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      onSelected: (value) async {
+                        if (value == 'logout') await authService.signOut();
+                      },
+                      itemBuilder: (context) => _buildMenuItems(uid),
                     ),
                   ),
                 ),
-                _buildSliverAdvanceList(uid),
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             ),
-          ),
-        );
-      },
-    );
-  }
-
-  // --- UI: MENU ITEMS ---
-  List<PopupMenuEntry<String>> _buildMenuItems(String name) {
-    return [
-      PopupMenuItem<String>(
-        enabled: false,
-        child: Text(
-          "Hi, $name",
-          style: GoogleFonts.inter(
-            fontWeight: FontWeight.bold,
-            color: AppColors.textMain,
-          ),
-        ),
-      ),
-      const PopupMenuDivider(),
-      const PopupMenuItem<String>(
-        value: 'logout',
-        child: Row(
-          children: [
-            Icon(Icons.logout, size: 18, color: Colors.redAccent),
-            SizedBox(width: 10),
-            Text("Log Out"),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: _buildResponsiveSummary(uid),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18.0,
+                  vertical: 8.0,
+                ),
+                child: Text(
+                  "Recent Activity",
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMain,
+                  ),
+                ),
+              ),
+            ),
+            _buildSliverAdvanceList(uid),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
       ),
-    ];
+    );
   }
 
-  // --- UI: SUMMARY CARDS ---
+  // --- UI BUILDERS ---
+
   Widget _buildResponsiveSummary(String uid) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -280,7 +239,6 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  // --- UI: ADVANCE LIST ---
   Widget _buildSliverAdvanceList(String uid) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -326,7 +284,9 @@ class HomePage extends StatelessWidget {
     Color statusColor = status == 'Approved'
         ? Colors.green
         : (status == 'Rejected' ? Colors.redAccent : Colors.orange);
-    String refId = data['referenceId'] ?? '--------';
+
+    // Get the fund class display string from the integer
+    String fundDisplay = "Class ${data['fundClassification'] ?? '1'}";
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -357,15 +317,7 @@ class HomePage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Fund Class: ${data['fundClassification'] ?? 'N/A'}",
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Colors.black54,
-              ),
-            ),
-            Text(
-              data['purpose'] ?? "No purpose",
+              "$fundDisplay • ${data['purpose'] ?? 'No purpose'}",
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12),
@@ -399,8 +351,12 @@ class HomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
+            // RE-SUBMIT / EDIT BUTTON
             if (status == 'Pending' || status == 'Rejected')
               IconButton(
+                tooltip: status == 'Rejected'
+                    ? 'Resubmit as New'
+                    : 'Edit Application',
                 icon: Icon(
                   status == 'Rejected' ? Icons.refresh : Icons.edit_outlined,
                   color: Colors.blue,
@@ -413,8 +369,10 @@ class HomePage extends StatelessWidget {
                   existingData: data,
                 ),
               ),
+            // PDF ACTIONS
             if (status == 'Approved') ...[
               IconButton(
+                tooltip: 'Download PDF',
                 icon: const Icon(
                   Icons.file_download_outlined,
                   color: Colors.blue,
@@ -423,6 +381,7 @@ class HomePage extends StatelessWidget {
                 onPressed: () => _generatePDF(data, action: 'download'),
               ),
               IconButton(
+                tooltip: 'Print PDF',
                 icon: const Icon(
                   Icons.print_outlined,
                   color: Colors.green,
@@ -437,12 +396,14 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  // --- LOGIC: PDF GENERATION (UPDATED) ---
+  // --- LOGIC ---
+
   Future<void> _generatePDF(
     Map<String, dynamic> data, {
     String action = 'print',
   }) async {
     final pdf = pw.Document();
+
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(data['userId'])
@@ -453,6 +414,7 @@ class HomePage extends StatelessWidget {
         "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}";
     final String employeeId = userData['employeeId']?.toString() ?? "N/A";
     final String refId = data['referenceId'] ?? "N/A";
+    final String fundClassStr = "Class ${data['fundClassification'] ?? '1'}";
 
     final String position = userData['position'] ?? '';
     final String department = userData['department'] ?? '';
@@ -512,13 +474,22 @@ class HomePage extends StatelessWidget {
                     pw.TableRow(
                       children: [
                         _pdfLabelValue("EMPLOYEE:", employeeName),
-                        _pdfLabelValue("EMP NO:", employeeId),
+                        _pdfLabelValue("NO:", employeeId),
                       ],
                     ),
                     pw.TableRow(
                       children: [
-                        _pdfLabelValue("FUND CLASS:", fundClass),
+                        _pdfLabelValue(
+                          "POSITION / DEPT:",
+                          positionDeptCombined,
+                        ),
                         _pdfLabelValue("DATE:", dateStr),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        _pdfLabelValue("FUND CLASSIFICATION:", fundClassStr),
+                        pw.SizedBox(),
                       ],
                     ),
                   ],
@@ -526,6 +497,10 @@ class HomePage extends StatelessWidget {
                 pw.SizedBox(height: 10),
                 pw.Table(
                   border: pw.TableBorder.all(color: PdfColors.black),
+                  columnWidths: {
+                    0: const pw.FlexColumnWidth(3),
+                    1: const pw.FlexColumnWidth(1),
+                  },
                   children: [
                     pw.TableRow(
                       decoration: const pw.BoxDecoration(
@@ -563,7 +538,7 @@ class HomePage extends StatelessWidget {
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
                           child: pw.Text(
-                            "PHP ${NumberFormat('#,##0.00').format(data['amount'])}",
+                            NumberFormat('#,##0.00').format(data['amount']),
                             textAlign: pw.TextAlign.right,
                           ),
                         ),
@@ -572,7 +547,6 @@ class HomePage extends StatelessWidget {
                   ],
                 ),
                 pw.SizedBox(height: 40),
-                // --- Updated Signature Block Section ---
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
@@ -584,10 +558,7 @@ class HomePage extends StatelessWidget {
                   ],
                 ),
                 pw.SizedBox(height: 30),
-                _pdfSignatureBlock(
-                  "Released by:",
-                  "Disbursing Officer / Cashier",
-                ),
+                _pdfSignatureBlock("Released by:", ""),
               ],
             ),
           );
@@ -606,212 +577,6 @@ class HomePage extends StatelessWidget {
       );
     }
   }
-
-  // --- UI: FORM MODAL ---
-  void _showApplyPopup(
-    BuildContext context,
-    String uid, {
-    String? editDocId,
-    Map<String, dynamic>? existingData,
-  }) async {
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .get();
-    final userData = userDoc.data() ?? {};
-
-    final amountController = TextEditingController(
-      text: existingData != null ? existingData['amount'].toString() : "",
-    );
-    final purposeController = TextEditingController(
-      text: existingData != null ? existingData['purpose'] : "",
-    );
-
-    String selectedFundClass = existingData?['fundClassification'] ?? '1';
-
-    if (!context.mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 20,
-          right: 20,
-          top: 20,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                editDocId == null
-                    ? "Apply for Advance"
-                    : (existingData?['status'] == 'Rejected'
-                          ? "Resubmit Application"
-                          : "Edit Request"),
-                style: GoogleFonts.inter(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 15),
-              _infoRow(
-                "Employee",
-                "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}",
-              ),
-              _infoRow(
-                "ID / Dept",
-                "${userData['employeeId'] ?? ''} | ${userData['department'] ?? ''}",
-              ),
-              const SizedBox(height: 15),
-              TextField(
-                controller: amountController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: _inputStyle("Amount (₱)"),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: purposeController,
-                maxLines: 2,
-                decoration: _inputStyle("Purpose"),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onPressed: () => _submit(
-                    context,
-                    uid,
-                    amountController.text,
-                    purposeController.text,
-                    editDocId: editDocId,
-                    existingStatus: existingData?['status'],
-                    existingRefId: existingData?['referenceId'],
-                  ),
-                  child: Text(
-                    editDocId == null
-                        ? "Submit"
-                        : (existingData?['status'] == 'Rejected'
-                              ? "Submit as New"
-                              : "Update Request"),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- LOGIC: SUBMISSION ---
-  Future<void> _submit(
-    BuildContext context,
-    String uid,
-    String amount,
-    String purpose,
-    String fundClass, {
-    String? editDocId,
-    String? existingStatus,
-    String? existingRefId,
-  }) async {
-    if (amount.isEmpty || purpose.isEmpty) return;
-
-    final data = {
-      'userId': uid,
-      'amount': double.tryParse(amount) ?? 0,
-      'purpose': purpose,
-      'fundClassification': fundClass,
-      'status': 'Pending',
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    // New documents or Rejected resubmissions get a NEW reference ID
-    if (editDocId == null || existingStatus == 'Rejected') {
-      data['createdAt'] = FieldValue.serverTimestamp();
-      data['referenceId'] = _generateCleanRefId();
-
-      if (existingStatus == 'Rejected') {
-        data['resubmittedFrom'] = editDocId as Object;
-      }
-      await FirebaseFirestore.instance.collection('advances').add(data);
-    } else {
-      // Updates keep their existing referenceId
-      data['referenceId'] = existingRefId ?? _generateCleanRefId();
-      await FirebaseFirestore.instance
-          .collection('advances')
-          .doc(editDocId)
-          .update(data);
-    }
-
-    if (context.mounted) Navigator.pop(context);
-  }
-
-  // --- SHARED UI HELPERS ---
-  Widget _buildEmptyState() {
-    return Column(
-      children: [
-        const SizedBox(height: 50),
-        Icon(Icons.receipt_long_outlined, size: 60, color: Colors.grey[300]),
-        const SizedBox(height: 10),
-        Text(
-          "No applications found.",
-          style: GoogleFonts.inter(color: Colors.grey),
-        ),
-      ],
-    );
-  }
-
-  Widget _infoRow(String label, String value) => Padding(
-    padding: const EdgeInsets.only(bottom: 4.0),
-    child: Text(
-      "$label: $value",
-      style: const TextStyle(fontSize: 12, color: Colors.grey),
-    ),
-  );
-
-  InputDecoration _inputStyle(String label) => InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: Colors.grey[100],
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    ),
-  );
 
   pw.Widget _pdfLabelValue(String label, String value) {
     return pw.Padding(
@@ -851,5 +616,253 @@ class HomePage extends StatelessWidget {
           pw.Text(subLabel, style: const pw.TextStyle(fontSize: 8)),
       ],
     );
+  }
+
+  void _showApplyPopup(
+    BuildContext context,
+    String uid, {
+    String? editDocId,
+    Map<String, dynamic>? existingData,
+  }) async {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    final userData = userDoc.data() ?? {};
+
+    final amountController = TextEditingController(
+      text: existingData != null ? existingData['amount'].toString() : "",
+    );
+    final purposeController = TextEditingController(
+      text: existingData != null ? existingData['purpose'] : "",
+    );
+
+    // Initial logic to determine the integer for the dropdown
+    int selectedFundVal = existingData?['fundClassification'] ?? 1;
+
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 20,
+            right: 20,
+            top: 20,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  editDocId == null
+                      ? "Apply for Advance"
+                      : (existingData?['status'] == 'Rejected'
+                            ? "Resubmit Application"
+                            : "Edit Request"),
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                _infoRow(
+                  "Employee",
+                  "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}",
+                ),
+                _infoRow(
+                  "ID / Dept",
+                  "${userData['employeeId'] ?? ''} | ${userData['department'] ?? ''}",
+                ),
+                const SizedBox(height: 15),
+
+                // MAPPED DROPDOWN: Label shows "Class X", value is X (int)
+                DropdownButtonFormField<int>(
+                  initialValue: selectedFundVal,
+                  decoration: _inputStyle("Fund Classification"),
+                  items: [
+                    const DropdownMenuItem(value: 1, child: Text("Class 1")),
+                    const DropdownMenuItem(value: 2, child: Text("Class 2")),
+                    const DropdownMenuItem(value: 3, child: Text("Class 3")),
+                  ],
+                  onChanged: (val) {
+                    setModalState(() {
+                      selectedFundVal = val!;
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: _inputStyle("Amount (₱)"),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: purposeController,
+                  maxLines: 2,
+                  decoration: _inputStyle("Purpose"),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => _submit(
+                      context,
+                      uid,
+                      amountController.text,
+                      purposeController.text,
+                      selectedFundVal, // Sends integer
+                      editDocId: editDocId,
+                      existingStatus: existingData?['status'],
+                      existingRefId: existingData?['referenceId'],
+                    ),
+                    child: Text(
+                      editDocId == null
+                          ? "Submit"
+                          : (existingData?['status'] == 'Rejected'
+                                ? "Submit as New"
+                                : "Update Request"),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit(
+    BuildContext context,
+    String uid,
+    String amount,
+    String purpose,
+    int fundClassification, { // Integer passed here
+    String? editDocId,
+    String? existingStatus,
+    String? existingRefId,
+  }) async {
+    if (amount.isEmpty || purpose.isEmpty) return;
+
+    final data = {
+      'userId': uid,
+      'amount': double.tryParse(amount) ?? 0,
+      'purpose': purpose,
+      'fundClassification': fundClassification, // Uses your specific field name
+      'status': 'Pending',
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (editDocId == null || existingStatus == 'Rejected') {
+      data['createdAt'] = FieldValue.serverTimestamp();
+      data['referenceId'] = _generateCleanRefId();
+
+      if (existingStatus == 'Rejected') {
+        data['resubmittedFrom'] = editDocId as Object;
+      }
+      await FirebaseFirestore.instance.collection('advances').add(data);
+    } else {
+      data['referenceId'] = existingRefId ?? _generateCleanRefId();
+      await FirebaseFirestore.instance
+          .collection('advances')
+          .doc(editDocId)
+          .update(data);
+    }
+
+    if (context.mounted) Navigator.pop(context);
+  }
+
+  Widget _buildEmptyState() {
+    return Column(
+      children: [
+        const SizedBox(height: 50),
+        Icon(Icons.receipt_long_outlined, size: 60, color: Colors.grey[300]),
+        const SizedBox(height: 10),
+        Text(
+          "No applications found.",
+          style: GoogleFonts.inter(color: Colors.grey),
+        ),
+      ],
+    );
+  }
+
+  Widget _infoRow(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 4.0),
+    child: Text(
+      "$label: $value",
+      style: const TextStyle(fontSize: 12, color: Colors.grey),
+    ),
+  );
+
+  InputDecoration _inputStyle(String label) => InputDecoration(
+    labelText: label,
+    filled: true,
+    fillColor: Colors.grey[100],
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+  );
+
+  List<PopupMenuEntry<String>> _buildMenuItems(String uid) {
+    return [
+      PopupMenuItem(
+        enabled: false,
+        child: FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
+          builder: (context, snapshot) {
+            String name = "User";
+            if (snapshot.hasData && snapshot.data!.exists) {
+              name = snapshot.data!['firstName'] ?? "User";
+            }
+            return Text(
+              "Hi, $name",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            );
+          },
+        ),
+      ),
+      const PopupMenuDivider(),
+      const PopupMenuItem(value: 'logout', child: Text("Log Out")),
+    ];
   }
 }
