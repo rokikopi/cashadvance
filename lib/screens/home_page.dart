@@ -7,7 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:cashadvance/theme/constants.dart';
 
-// New Imports for PDF and Printing
+// PDF and Printing
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -81,7 +81,16 @@ class HomePage extends StatelessWidget {
                         borderRadius: BorderRadius.circular(15),
                       ),
                       onSelected: (value) async {
-                        if (value == 'logout') await authService.signOut();
+                        if (value == 'logout') {
+                          // 1. Trigger Sign out
+                          await authService.signOut();
+                          // 2. Force navigation reset to clear any lingering UI state
+                          if (context.mounted) {
+                            Navigator.of(
+                              context,
+                            ).pushNamedAndRemoveUntil('/', (route) => false);
+                          }
+                        }
                       },
                       itemBuilder: (context) => _buildMenuItems(uid),
                     ),
@@ -122,12 +131,18 @@ class HomePage extends StatelessWidget {
   // --- UI BUILDERS ---
 
   Widget _buildResponsiveSummary(String uid) {
+    // FIX: Guard against empty UID on logout
+    if (uid.isEmpty) return const SizedBox.shrink();
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('advances')
           .where('userId', isEqualTo: uid)
           .snapshots(),
       builder: (context, snapshot) {
+        // FIX: Handle Permission Denied during logout transition
+        if (snapshot.hasError) return const SizedBox.shrink();
+
         double totalApproved = 0;
         int pendingCount = 0;
 
@@ -240,6 +255,9 @@ class HomePage extends StatelessWidget {
   }
 
   Widget _buildSliverAdvanceList(String uid) {
+    // FIX: Guard against empty UID
+    if (uid.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('advances')
@@ -247,6 +265,11 @@ class HomePage extends StatelessWidget {
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
+        // FIX: Catch stream errors early
+        if (snapshot.hasError) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
+
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SliverToBoxAdapter(
             child: Center(
@@ -285,7 +308,6 @@ class HomePage extends StatelessWidget {
         ? Colors.green
         : (status == 'Rejected' ? Colors.redAccent : Colors.orange);
 
-    // Get the fund class display string from the integer
     String fundDisplay = "Class ${data['fundClassification'] ?? '1'}";
 
     return Container(
@@ -351,7 +373,6 @@ class HomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            // RE-SUBMIT / EDIT BUTTON
             if (status == 'Pending' || status == 'Rejected')
               IconButton(
                 tooltip: status == 'Rejected'
@@ -369,7 +390,6 @@ class HomePage extends StatelessWidget {
                   existingData: data,
                 ),
               ),
-            // PDF ACTIONS
             if (status == 'Approved') ...[
               IconButton(
                 tooltip: 'Download PDF',
@@ -624,6 +644,9 @@ class HomePage extends StatelessWidget {
     String? editDocId,
     Map<String, dynamic>? existingData,
   }) async {
+    // FIX: Guard against opening popup if uid is missing
+    if (uid.isEmpty) return;
+
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -637,7 +660,6 @@ class HomePage extends StatelessWidget {
       text: existingData != null ? existingData['purpose'] : "",
     );
 
-    // Initial logic to determine the integer for the dropdown
     int selectedFundVal = existingData?['fundClassification'] ?? 1;
 
     if (!context.mounted) return;
@@ -695,15 +717,13 @@ class HomePage extends StatelessWidget {
                   "${userData['employeeId'] ?? ''} | ${userData['department'] ?? ''}",
                 ),
                 const SizedBox(height: 15),
-
-                // MAPPED DROPDOWN: Label shows "Class X", value is X (int)
                 DropdownButtonFormField<int>(
                   initialValue: selectedFundVal,
                   decoration: _inputStyle("Fund Classification"),
-                  items: [
-                    const DropdownMenuItem(value: 1, child: Text("Class 1")),
-                    const DropdownMenuItem(value: 2, child: Text("Class 2")),
-                    const DropdownMenuItem(value: 3, child: Text("Class 3")),
+                  items: const [
+                    DropdownMenuItem(value: 1, child: Text("Class 1")),
+                    DropdownMenuItem(value: 2, child: Text("Class 2")),
+                    DropdownMenuItem(value: 3, child: Text("Class 3")),
                   ],
                   onChanged: (val) {
                     setModalState(() {
@@ -741,7 +761,7 @@ class HomePage extends StatelessWidget {
                       uid,
                       amountController.text,
                       purposeController.text,
-                      selectedFundVal, // Sends integer
+                      selectedFundVal,
                       editDocId: editDocId,
                       existingStatus: existingData?['status'],
                       existingRefId: existingData?['referenceId'],
@@ -773,7 +793,7 @@ class HomePage extends StatelessWidget {
     String uid,
     String amount,
     String purpose,
-    int fundClassification, { // Integer passed here
+    int fundClassification, {
     String? editDocId,
     String? existingStatus,
     String? existingRefId,
@@ -784,25 +804,29 @@ class HomePage extends StatelessWidget {
       'userId': uid,
       'amount': double.tryParse(amount) ?? 0,
       'purpose': purpose,
-      'fundClassification': fundClassification, // Uses your specific field name
+      'fundClassification': fundClassification,
       'status': 'Pending',
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    if (editDocId == null || existingStatus == 'Rejected') {
-      data['createdAt'] = FieldValue.serverTimestamp();
-      data['referenceId'] = _generateCleanRefId();
+    try {
+      if (editDocId == null || existingStatus == 'Rejected') {
+        data['createdAt'] = FieldValue.serverTimestamp();
+        data['referenceId'] = _generateCleanRefId();
 
-      if (existingStatus == 'Rejected') {
-        data['resubmittedFrom'] = editDocId as Object;
+        if (existingStatus == 'Rejected') {
+          data['resubmittedFrom'] = editDocId as Object;
+        }
+        await FirebaseFirestore.instance.collection('advances').add(data);
+      } else {
+        data['referenceId'] = existingRefId ?? _generateCleanRefId();
+        await FirebaseFirestore.instance
+            .collection('advances')
+            .doc(editDocId)
+            .update(data);
       }
-      await FirebaseFirestore.instance.collection('advances').add(data);
-    } else {
-      data['referenceId'] = existingRefId ?? _generateCleanRefId();
-      await FirebaseFirestore.instance
-          .collection('advances')
-          .doc(editDocId)
-          .update(data);
+    } catch (e) {
+      debugPrint("Error submitting: $e");
     }
 
     if (context.mounted) Navigator.pop(context);
@@ -844,22 +868,27 @@ class HomePage extends StatelessWidget {
     return [
       PopupMenuItem(
         enabled: false,
-        child: FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
-          builder: (context, snapshot) {
-            String name = "User";
-            if (snapshot.hasData && snapshot.data!.exists) {
-              name = snapshot.data!['firstName'] ?? "User";
-            }
-            return Text(
-              "Hi, $name",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
+        child: uid.isEmpty
+            ? const Text("User")
+            : FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .get(),
+                builder: (context, snapshot) {
+                  String name = "User";
+                  if (snapshot.hasData && snapshot.data!.exists) {
+                    name = snapshot.data!['firstName'] ?? "User";
+                  }
+                  return Text(
+                    "Hi, $name",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  );
+                },
               ),
-            );
-          },
-        ),
       ),
       const PopupMenuDivider(),
       const PopupMenuItem(value: 'logout', child: Text("Log Out")),
