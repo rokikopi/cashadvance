@@ -1,3 +1,4 @@
+import 'package:cashadvance/screens/home_page.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -165,7 +166,12 @@ class _LoginPageState extends State<LoginPage> {
                 color: AppColors.textMain,
                 size: 20,
               ),
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HomePage(),
+            ),
+          ),
             ),
           ),
           body: SafeArea(
