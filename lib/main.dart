@@ -35,11 +35,12 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E5BFF)),
         useMaterial3: true,
       ),
+      // Use initialRoute and routes for clean navigation
+      initialRoute: '/',
       routes: {
         '/': (context) => const AuthGate(),
         '/login': (context) => const SplashPage(),
       },
-      initialRoute: '/',
     );
   }
 }
@@ -54,16 +55,19 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: authService.authStateChanges,
       builder: (context, snapshot) {
+        // If snapshot is still connecting, show loader
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
+        // If user is logged in, move to Role Check
         if (snapshot.hasData && snapshot.data != null) {
           return UserRoleGate(uid: snapshot.data!.uid);
         }
 
+        // If logged out, go to Splash/Login
         return const SplashPage();
       },
     );
@@ -77,34 +81,36 @@ class UserRoleGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
+      // Key fix: If the stream encounters an error (like permission denied on logout),
+      // we gracefully return to the login screen instead of hanging.
       stream: FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .snapshots(),
       builder: (context, snapshot) {
-        // 1. Handle Errors (e.g., permission denied on logout)
+        // 1. Check for errors (Permission Denied happens here during logout)
         if (snapshot.hasError) {
           return const SplashPage();
         }
 
-        // 2. Loading State
+        // 2. Loading state for Firestore data
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // 3. Document exists: Route to Admin or Home
+        // 3. User Document Exists
         if (snapshot.hasData &&
             snapshot.data != null &&
             snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final bool isAdmin = data['isAdmin'] ?? false;
+
           return isAdmin ? const AdminPage() : const HomePage();
         }
 
-        // 4. Document MISSING: Force Registration
-        // This ensures Google users complete their profile before entering the app
+        // 4. Handle account initialization (No doc found)
         return const RegisterPage();
       },
     );
