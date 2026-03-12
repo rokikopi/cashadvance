@@ -1,3 +1,4 @@
+import 'package:cashadvance/screens/home_page.dart';
 import 'package:cashadvance/screens/login_page.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:flutter/material.dart';
@@ -194,7 +195,12 @@ class _RegisterPageState extends State<RegisterPage> {
                 color: AppColors.textMain,
                 size: 20,
               ),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HomePage(),
+            ),
+          ),
             ),
           ),
           body: SafeArea(
