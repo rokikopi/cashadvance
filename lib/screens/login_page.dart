@@ -20,7 +20,8 @@ class _LoginPageState extends State<LoginPage> {
   final _pwController = TextEditingController();
 
   bool _isPasswordVisible = false;
-  bool _isLoading = false;
+  // Set to true on Web initially to handle the redirect check silently
+  bool _isLoading = kIsWeb;
   bool _isForgotHovered = false;
   bool _isSignUpHovered = false;
 
@@ -34,17 +35,20 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _checkRedirectResult() async {
     try {
+      // Catch the user object after a browser redirect
       final UserCredential userCredential = await FirebaseAuth.instance
           .getRedirectResult();
 
       if (userCredential.user != null) {
         debugPrint(
-          "Redirect sign-in successful for: ${userCredential.user!.email}",
+          "Redirect sign-in successful: ${userCredential.user!.email}",
         );
-        // Navigation is handled by the AuthGate listener in main.dart
+        // No manual navigation needed; AuthGate in main.dart is listening.
       }
     } catch (e) {
       debugPrint("Redirect Result Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -68,20 +72,17 @@ class _LoginPageState extends State<LoginPage> {
         _emailController.text.trim(),
         _pwController.text.trim(),
       );
-
-      if (mounted) {
-        // Clear stack and go to Splash/AuthGate to confirm session
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const SplashPage()),
-          (route) => false,
-        );
-      }
+      // Success! AuthGate will now swap this screen for Home/Admin automatically.
     } on FirebaseAuthException catch (e) {
-      if (mounted) _showError(_friendlyAuthError(e.code));
+      if (mounted) {
+        _showError(_friendlyAuthError(e.code));
+        setState(() => _isLoading = false);
+      }
     } catch (e) {
-      if (mounted) _showError("An unexpected error occurred.");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        _showError("An unexpected error occurred.");
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -89,17 +90,13 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
     try {
       await _authService.signInWithGoogle();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const SplashPage()),
-          (route) => false,
-        );
-      }
+      // On Web, the page will redirect. On Mobile, the stream will update.
     } catch (e) {
       debugPrint("Google Login Error: $e");
-      if (mounted) _showError("Google Sign-In failed. Please try again.");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        _showError("Google Sign-In failed. Please try again.");
+        setState(() => _isLoading = false);
+      }
     }
   }
 
