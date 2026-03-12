@@ -13,66 +13,93 @@ class AdminPage extends StatelessWidget {
   Future<void> _handleLogout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
     if (context.mounted) {
-      // Navigates back to the root (AuthGate) which will show Login
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: AppColors.textMain,
-        centerTitle: false,
-        // --- INCREASED TOOLBAR HEIGHT ---
-        toolbarHeight: 90,
-        // --- LOGO IN TOP LEFT ---
-        leading: Padding(
-          padding: const EdgeInsets.only(
-            left: 15.0,
-            top: 10.0,
-            bottom: 10.0,
-          ), // Adjust padding
-          child: Image.asset(
-            'assets/images/logo.png',
-            height: 65, // --- ENLARGED LOGO ---
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Icon(
-              Icons.account_balance_wallet,
-              color: AppColors.primary,
-              size: 40,
+    return DefaultTabController(
+      length: 3, // For Pending, Approved, Rejected
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FA),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          foregroundColor: AppColors.textMain,
+          centerTitle: false,
+          toolbarHeight: 90,
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 15.0, top: 10.0, bottom: 10.0),
+            child: Image.asset(
+              'assets/images/logo.png',
+              height: 65,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.account_balance_wallet,
+                color: AppColors.primary,
+                size: 40,
+              ),
             ),
           ),
-        ),
-        leadingWidth: 80, // Allow more width for the enlarged logo
-        title: Text(
-          "Admin Dashboard",
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        actions: [
-          // --- LOGOUT BUTTON ---
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-            onPressed: () => _showLogoutConfirmation(context),
-            tooltip: 'Logout',
+          leadingWidth: 80,
+          title: Text(
+            "Admin Dashboard",
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionHeader("User Management"),
-            _buildUserSection(context),
-            const SizedBox(height: 24),
-            _buildSectionHeader("Pending Applications"),
-            _buildApplicationsSection(context),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+              onPressed: () => _showLogoutConfirmation(context),
+              tooltip: 'Logout',
+            ),
+            const SizedBox(width: 8),
           ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionHeader("User Management"),
+              _buildUserSection(context),
+              const SizedBox(height: 24),
+              _buildSectionHeader("Transaction History"),
+              // --- TAB BAR FOR FILTERING ---
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: TabBar(
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  indicator: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: AppColors.primary,
+                  ),
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.grey[600],
+                  tabs: const [
+                    Tab(text: "Pending"),
+                    Tab(text: "Approved"),
+                    Tab(text: "Rejected"),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // --- TAB BAR VIEW CONTENT ---
+              SizedBox(
+                height: 500, // Fixed height for the scrollable list area
+                child: TabBarView(
+                  children: [
+                    _buildApplicationsSection(context, "Pending"),
+                    _buildApplicationsSection(context, "Approved"),
+                    _buildApplicationsSection(context, "Rejected"),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -145,13 +172,13 @@ class AdminPage extends StatelessWidget {
     );
   }
 
-  // --- APPLICATIONS SECTION ---
+  // --- APPLICATIONS SECTION (UPDATED) ---
 
-  Widget _buildApplicationsSection(BuildContext context) {
+  Widget _buildApplicationsSection(BuildContext context, String statusFilter) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('advances')
-          .where('status', isEqualTo: 'Pending')
+          .where('status', isEqualTo: statusFilter)
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -162,17 +189,16 @@ class AdminPage extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState("No pending applications");
+          return _buildEmptyState("No $statusFilter applications");
         }
 
         return ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(top: 8),
           itemCount: snapshot.data!.docs.length,
           itemBuilder: (context, index) {
             final doc = snapshot.data!.docs[index];
             final data = doc.data() as Map<String, dynamic>;
-            return _buildApplicationCard(context, doc.id, data);
+            return _buildApplicationCard(context, doc.id, data, statusFilter);
           },
         );
       },
@@ -183,6 +209,7 @@ class AdminPage extends StatelessWidget {
     BuildContext context,
     String docId,
     Map<String, dynamic> data,
+    String status,
   ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -198,6 +225,26 @@ class AdminPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Display Reference ID
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    "REF: ${data['referenceId'] ?? 'N/A'}",
+                    style: GoogleFonts.robotoMono(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
                 FutureBuilder<DocumentSnapshot>(
                   future: FirebaseFirestore.instance
                       .collection('users')
@@ -229,14 +276,28 @@ class AdminPage extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.check_circle, color: Colors.green, size: 32),
-            onPressed: () => _confirmAction(context, docId, "Approved"),
-          ),
-          IconButton(
-            icon: const Icon(Icons.cancel, color: Colors.redAccent, size: 32),
-            onPressed: () => _confirmAction(context, docId, "Rejected"),
-          ),
+          // Actions: Only show approve/reject buttons if the status is currently Pending
+          if (status == "Pending") ...[
+            IconButton(
+              icon: const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 32,
+              ),
+              onPressed: () => _confirmAction(context, docId, "Approved"),
+            ),
+            IconButton(
+              icon: const Icon(Icons.cancel, color: Colors.redAccent, size: 32),
+              onPressed: () => _confirmAction(context, docId, "Rejected"),
+            ),
+          ] else ...[
+            // For Approved/Rejected, show a simple status icon
+            Icon(
+              status == "Approved" ? Icons.verified : Icons.error_outline,
+              color: status == "Approved" ? Colors.green : Colors.redAccent,
+              size: 24,
+            ),
+          ],
         ],
       ),
     );
@@ -474,19 +535,22 @@ class AdminPage extends StatelessWidget {
   }
 
   Widget _buildEmptyState(String message) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(40.0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.inbox_outlined, size: 40, color: Colors.grey.shade300),
-          const SizedBox(height: 8),
-          Text(message, style: const TextStyle(color: Colors.grey)),
-        ],
+    return Center(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(40.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.inbox_outlined, size: 40, color: Colors.grey.shade300),
+            const SizedBox(height: 8),
+            Text(message, style: const TextStyle(color: Colors.grey)),
+          ],
+        ),
       ),
     );
   }

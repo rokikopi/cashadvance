@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,6 +14,16 @@ import 'package:printing/printing.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
+
+  // Helper to generate an 8-character clean reference ID
+  String _generateCleanRefId() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excludes 0, O, 1, I, L
+    final random = Random();
+    return List.generate(
+      8,
+      (index) => chars[random.nextInt(chars.length)],
+    ).join();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -282,9 +293,22 @@ class HomePage extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade100),
       ),
       child: ListTile(
-        title: Text(
-          "₱${NumberFormat('#,##0.00').format(data['amount'])}",
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "₱${NumberFormat('#,##0.00').format(data['amount'])}",
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              data['referenceId'] ?? "",
+              style: GoogleFonts.robotoMono(
+                fontSize: 11,
+                color: Colors.grey[500],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -386,6 +410,7 @@ class HomePage extends StatelessWidget {
     final String employeeName =
         "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}";
     final String employeeId = userData['employeeId']?.toString() ?? "N/A";
+    final String refId = data['referenceId'] ?? "N/A";
 
     final String position = userData['position'] ?? '';
     final String department = userData['department'] ?? '';
@@ -415,14 +440,25 @@ class HomePage extends StatelessWidget {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Center(
-                  child: pw.Text(
-                    "CASH ADVANCE REQUEST",
-                    style: pw.TextStyle(
-                      fontSize: 16,
-                      fontWeight: pw.FontWeight.bold,
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      "CASH ADVANCE REQUEST",
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
                     ),
-                  ),
+                    pw.Text(
+                      "REF: $refId",
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                  ],
                 ),
                 pw.SizedBox(height: 20),
                 pw.Table(
@@ -527,7 +563,7 @@ class HomePage extends StatelessWidget {
     } else {
       await Printing.sharePdf(
         bytes: await pdf.save(),
-        filename: 'Cash_Advance_$dateStr.pdf',
+        filename: 'Cash_Advance_${refId}_$dateStr.pdf',
       );
     }
   }
@@ -578,7 +614,6 @@ class HomePage extends StatelessWidget {
     String? editDocId,
     Map<String, dynamic>? existingData,
   }) async {
-    // Show a quick loading indicator if we are fetching user data
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -677,6 +712,7 @@ class HomePage extends StatelessWidget {
                     purposeController.text,
                     editDocId: editDocId,
                     existingStatus: existingData?['status'],
+                    existingRefId: existingData?['referenceId'],
                   ),
                   child: Text(
                     editDocId == null
@@ -706,6 +742,7 @@ class HomePage extends StatelessWidget {
     String purpose, {
     String? editDocId,
     String? existingStatus,
+    String? existingRefId,
   }) async {
     if (amount.isEmpty || purpose.isEmpty) return;
 
@@ -717,15 +754,18 @@ class HomePage extends StatelessWidget {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    // LOGIC: If it's a new app OR the previous one was REJECTED, create a NEW document.
+    // New documents or Rejected resubmissions get a NEW reference ID
     if (editDocId == null || existingStatus == 'Rejected') {
       data['createdAt'] = FieldValue.serverTimestamp();
+      data['referenceId'] = _generateCleanRefId();
+
       if (existingStatus == 'Rejected') {
-        data['resubmittedFrom'] = editDocId as Object; // Optional: track history
+        data['resubmittedFrom'] = editDocId as Object;
       }
       await FirebaseFirestore.instance.collection('advances').add(data);
     } else {
-      // Otherwise, update the existing document (only for Pending items)
+      // Updates keep their existing referenceId
+      data['referenceId'] = existingRefId ?? _generateCleanRefId();
       await FirebaseFirestore.instance
           .collection('advances')
           .doc(editDocId)
