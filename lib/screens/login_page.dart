@@ -2,10 +2,12 @@ import 'package:cashadvance/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Required for role check
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cashadvance/theme/constants.dart';
 import 'package:cashadvance/screens/register_page.dart';
-import 'package:cashadvance/screens/admin_page.dart'; // Required for admin redirect
+import 'package:cashadvance/screens/home_page.dart';
+import 'package:cashadvance/screens/admin_page.dart';
+import 'package:flutter/foundation.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -25,15 +27,36 @@ class _LoginPageState extends State<LoginPage> {
   bool _isSignUpHovered = false;
 
   @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      _checkRedirectResult();
+    }
+  }
+
+  Future<void> _checkRedirectResult() async {
+    try {
+      final UserCredential userCredential = await FirebaseAuth.instance
+          .getRedirectResult();
+
+      if (userCredential.user != null) {
+        setState(() => _isLoading = true);
+        await _routeUser(userCredential.user!);
+      }
+    } catch (e) {
+      debugPrint("Redirect Result Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _pwController.dispose();
     super.dispose();
   }
 
-  // --- Auth & Routing Logic ---
-
-  /// Checks if the user is an admin and routes them to the correct page
   Future<void> _routeUser(User user) async {
     try {
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
@@ -42,21 +65,25 @@ class _LoginPageState extends State<LoginPage> {
           .get();
 
       if (mounted) {
-        bool isAdmin = false;
         if (userDoc.exists) {
           final data = userDoc.data() as Map<String, dynamic>;
-          isAdmin = data['isAdmin'] ?? false;
-        }
+          bool isAdmin = data['isAdmin'] ?? false;
 
-        if (isAdmin) {
-          // If Admin, replace login stack with AdminPage
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const AdminPage()),
+            MaterialPageRoute(
+              builder: (context) =>
+                  isAdmin ? const AdminPage() : const HomePage(),
+            ),
             (route) => false,
           );
         } else {
-          // If User, pop to return to Home (handled by AuthGate)
-          Navigator.of(context).pop();
+          // Navigates to RegisterPage and passes the user data
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => RegisterPage(socialUser: user),
+            ),
+          );
         }
       }
     } catch (e) {
@@ -93,7 +120,6 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
     try {
       final userCredential = await _authService.signInWithGoogle();
-
       if (userCredential?.user != null) {
         await _routeUser(userCredential!.user!);
       }
@@ -121,8 +147,6 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
-  // --- UI Helpers ---
 
   String _friendlyAuthError(String code) {
     switch (code) {

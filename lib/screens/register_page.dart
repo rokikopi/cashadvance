@@ -5,9 +5,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cashadvance/theme/constants.dart';
+import 'package:flutter/foundation.dart';
 
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+  final User? socialUser; // Added to accept data from Login
+  const RegisterPage({super.key, this.socialUser});
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -27,8 +29,55 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
   bool _isGoogleUser = false;
-
   bool _isLoginHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // 1. Check if we arrived here from Login with a socialUser
+    if (widget.socialUser != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _applyGoogleData(widget.socialUser!);
+      });
+    }
+
+    // 2. Check for Web Redirect (if they clicked "Continue with Google" directly on this page)
+    if (kIsWeb) {
+      _checkRedirectResult();
+    }
+  }
+
+  Future<void> _checkRedirectResult() async {
+    try {
+      final UserCredential userCredential = await FirebaseAuth.instance
+          .getRedirectResult();
+
+      if (userCredential.user != null) {
+        _applyGoogleData(userCredential.user!);
+      }
+    } catch (e) {
+      debugPrint("Registration Redirect Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _applyGoogleData(User user) {
+    List<String> nameParts = (user.displayName ?? "").split(" ");
+    setState(() {
+      _fNameController.text = nameParts.first;
+      _lNameController.text = nameParts.length > 1
+          ? nameParts.sublist(1).join(" ")
+          : "";
+      _emailController.text = user.email ?? "";
+      _pwController.text = "GOOGLE_USER_AUTH";
+      _confirmPwController.text = "GOOGLE_USER_AUTH";
+      _isGoogleUser = true;
+    });
+
+    _showSuccess("Google account linked. Please provide employee details.");
+  }
 
   @override
   void dispose() {
@@ -47,34 +96,11 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => _isLoading = true);
     try {
       final authService = AuthService();
-      // We sign out first to ensure a fresh Google picker
-      await authService.signOut();
-
       final userCredential = await authService.signInWithGoogle();
 
-      if (userCredential == null) {
-        if (mounted) setState(() => _isLoading = false);
-        return;
+      if (userCredential != null) {
+        _applyGoogleData(userCredential.user!);
       }
-
-      final user = userCredential.user;
-      List<String> nameParts = (user?.displayName ?? "").split(" ");
-
-      setState(() {
-        _fNameController.text = nameParts.first;
-        _lNameController.text = nameParts.length > 1
-            ? nameParts.sublist(1).join(" ")
-            : "";
-        _emailController.text = user?.email ?? "";
-        _pwController.text = "GOOGLE_USER_AUTH";
-        _confirmPwController.text = "GOOGLE_USER_AUTH";
-        _isGoogleUser = true;
-        _isLoading = false;
-      });
-
-      _showSuccess(
-        "Google details imported. Please complete the remaining fields.",
-      );
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
       _showError("Google Error: $e");
@@ -82,7 +108,6 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _submitRegistration() async {
-    // 1. Validation
     if (!_isGoogleUser && (_pwController.text != _confirmPwController.text)) {
       _showError("Passwords do not match!");
       return;
@@ -98,7 +123,6 @@ class _RegisterPageState extends State<RegisterPage> {
     try {
       String? uid;
       if (!_isGoogleUser) {
-        // Create new account for Email/PW users
         UserCredential userCredential = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(
               email: _emailController.text.trim(),
@@ -106,14 +130,12 @@ class _RegisterPageState extends State<RegisterPage> {
             );
         uid = userCredential.user?.uid;
       } else {
-        // Use existing UID for Google users already authenticated via autofill
         uid = FirebaseAuth.instance.currentUser?.uid;
         if (uid == null) {
           throw Exception("Session expired. Please re-authenticate.");
         }
       }
 
-      // 2. Save/Update profile in Firestore
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'firstName': _fNameController.text.trim(),
         'lastName': _lNameController.text.trim(),
@@ -127,7 +149,6 @@ class _RegisterPageState extends State<RegisterPage> {
 
       _showSuccess("Registration Complete!");
 
-      // 3. AUTO-REDIRECT LOGIC
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
@@ -201,7 +222,6 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                   ),
                   const SizedBox(height: 30),
-
                   _buildTextField(
                     label: "First Name",
                     icon: Icons.person_outline,
@@ -235,7 +255,6 @@ class _RegisterPageState extends State<RegisterPage> {
                     icon: Icons.work_outline,
                     controller: _posController,
                   ),
-
                   if (!_isGoogleUser) ...[
                     _buildTextField(
                       label: "Password",
@@ -259,7 +278,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     ),
                   ],
-
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
@@ -283,14 +301,11 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     ),
                   ),
-
                   if (!_isGoogleUser) ...[
                     const SizedBox(height: 15),
                     _buildGoogleButton(),
                   ],
-
                   const SizedBox(height: 25),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -306,7 +321,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
                           onTap: () {
-                            Navigator.push(
+                            Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => const LoginPage(),

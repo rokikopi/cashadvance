@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
 import 'screens/splash_page.dart';
 import 'screens/home_page.dart';
 import 'screens/admin_page.dart';
+import 'screens/register_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // REMOVED usePathUrlStrategy();
-  // By leaving this out, Flutter uses the Hash Strategy (/#/)
-  // This is the "Golden Rule" for GitHub Pages to avoid 404 errors on refresh.
-
+  usePathUrlStrategy();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  if (kIsWeb) {
+    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+  }
 
   runApp(const MyApp());
 }
@@ -46,8 +49,10 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder(
-      stream: AuthService().authStateChanges,
+    final AuthService authService = AuthService();
+
+    return StreamBuilder<User?>(
+      stream: authService.authStateChanges,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
@@ -55,7 +60,7 @@ class AuthGate extends StatelessWidget {
           );
         }
 
-        if (snapshot.hasData) {
+        if (snapshot.hasData && snapshot.data != null) {
           return UserRoleGate(uid: snapshot.data!.uid);
         }
 
@@ -77,23 +82,30 @@ class UserRoleGate extends StatelessWidget {
           .doc(uid)
           .snapshots(),
       builder: (context, snapshot) {
+        // 1. Handle Errors (e.g., permission denied on logout)
+        if (snapshot.hasError) {
+          return const SplashPage();
+        }
+
+        // 2. Loading State
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        if (snapshot.hasData && snapshot.data!.exists) {
+        // 3. Document exists: Route to Admin or Home
+        if (snapshot.hasData &&
+            snapshot.data != null &&
+            snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final bool isAdmin = data['isAdmin'] ?? false;
-
-          if (isAdmin) {
-            return const AdminPage();
-          } else {
-            return const HomePage();
-          }
+          return isAdmin ? const AdminPage() : const HomePage();
         }
-        return const SplashPage();
+
+        // 4. Document MISSING: Force Registration
+        // This ensures Google users complete their profile before entering the app
+        return const RegisterPage();
       },
     );
   }

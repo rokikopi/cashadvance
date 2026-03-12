@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:math';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,7 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:cashadvance/theme/constants.dart';
 
-// New Imports for PDF and Printing
+// PDF and Printing
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -30,97 +31,137 @@ class HomePage extends StatelessWidget {
     final AuthService authService = AuthService();
     final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showApplyPopup(context, uid),
-        backgroundColor: AppColors.primary,
-        elevation: 4,
-        child: const Icon(Icons.add, color: Colors.white, size: 30),
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await Future.delayed(const Duration(milliseconds: 500));
-        },
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverAppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              pinned: true,
-              centerTitle: true,
-              toolbarHeight: 90,
-              expandedHeight: 110,
-              title: Padding(
-                padding: const EdgeInsets.only(top: 15.0),
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  height: 65,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Icon(
-                    Icons.account_balance_wallet,
-                    color: AppColors.primary,
-                    size: 40,
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots(),
+      builder: (context, userSnapshot) {
+        String userName = "User";
+        if (userSnapshot.hasData && userSnapshot.data!.exists) {
+          final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+          userName = userData['firstName'] ?? "User";
+        }
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFF8F9FA),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () => _showApplyPopup(context, uid),
+            backgroundColor: AppColors.primary,
+            elevation: 4,
+            child: const Icon(Icons.add, color: Colors.white, size: 30),
+          ),
+          body: RefreshIndicator(
+            onRefresh: () async {
+              await Future.delayed(const Duration(milliseconds: 500));
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverAppBar(
+                  backgroundColor: Colors.white,
+                  elevation: 0,
+                  pinned: true,
+                  centerTitle: true,
+                  toolbarHeight: 90,
+                  expandedHeight: 110,
+                  title: Padding(
+                    padding: const EdgeInsets.only(top: 15.0),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      height: 65,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => const Icon(
+                        Icons.account_balance_wallet,
+                        color: AppColors.primary,
+                        size: 40,
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8.0, right: 8.0),
+                        child: PopupMenuButton<String>(
+                          icon: const Icon(
+                            Icons.menu,
+                            color: AppColors.textMain,
+                            size: 28,
+                          ),
+                          offset: const Offset(0, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          onSelected: (value) async {
+                            if (value == 'logout') await authService.signOut();
+                          },
+                          itemBuilder: (context) => _buildMenuItems(userName),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: _buildResponsiveSummary(uid),
                   ),
                 ),
-              ),
-              actions: [
-                Align(
-                  alignment: Alignment.topRight,
+                SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 8.0, right: 8.0),
-                    child: PopupMenuButton<String>(
-                      icon: const Icon(
-                        Icons.menu,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18.0,
+                      vertical: 8.0,
+                    ),
+                    child: Text(
+                      "Recent Activity",
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                         color: AppColors.textMain,
-                        size: 28,
                       ),
-                      offset: const Offset(0, 50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      onSelected: (value) async {
-                        if (value == 'logout') await authService.signOut();
-                      },
-                      itemBuilder: (context) => _buildMenuItems(uid),
                     ),
                   ),
                 ),
+                _buildSliverAdvanceList(uid),
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: _buildResponsiveSummary(uid),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18.0,
-                  vertical: 8.0,
-                ),
-                child: Text(
-                  "Recent Activity",
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textMain,
-                  ),
-                ),
-              ),
-            ),
-            _buildSliverAdvanceList(uid),
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  // --- UI BUILDERS ---
+  // --- UI: MENU ITEMS ---
+  List<PopupMenuEntry<String>> _buildMenuItems(String name) {
+    return [
+      PopupMenuItem<String>(
+        enabled: false,
+        child: Text(
+          "Hi, $name",
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.bold,
+            color: AppColors.textMain,
+          ),
+        ),
+      ),
+      const PopupMenuDivider(),
+      const PopupMenuItem<String>(
+        value: 'logout',
+        child: Row(
+          children: [
+            Icon(Icons.logout, size: 18, color: Colors.redAccent),
+            SizedBox(width: 10),
+            Text("Log Out"),
+          ],
+        ),
+      ),
+    ];
+  }
 
+  // --- UI: SUMMARY CARDS ---
   Widget _buildResponsiveSummary(String uid) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -239,6 +280,7 @@ class HomePage extends StatelessWidget {
     );
   }
 
+  // --- UI: ADVANCE LIST ---
   Widget _buildSliverAdvanceList(String uid) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -284,6 +326,7 @@ class HomePage extends StatelessWidget {
     Color statusColor = status == 'Approved'
         ? Colors.green
         : (status == 'Rejected' ? Colors.redAccent : Colors.orange);
+    String refId = data['referenceId'] ?? '--------';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -313,6 +356,14 @@ class HomePage extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              "Fund Class: ${data['fundClassification'] ?? 'N/A'}",
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.black54,
+              ),
+            ),
             Text(
               data['purpose'] ?? "No purpose",
               maxLines: 1,
@@ -348,12 +399,8 @@ class HomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            // RE-SUBMIT / EDIT BUTTON
             if (status == 'Pending' || status == 'Rejected')
               IconButton(
-                tooltip: status == 'Rejected'
-                    ? 'Resubmit as New'
-                    : 'Edit Application',
                 icon: Icon(
                   status == 'Rejected' ? Icons.refresh : Icons.edit_outlined,
                   color: Colors.blue,
@@ -366,10 +413,8 @@ class HomePage extends StatelessWidget {
                   existingData: data,
                 ),
               ),
-            // PDF ACTIONS
             if (status == 'Approved') ...[
               IconButton(
-                tooltip: 'Download PDF',
                 icon: const Icon(
                   Icons.file_download_outlined,
                   color: Colors.blue,
@@ -378,7 +423,6 @@ class HomePage extends StatelessWidget {
                 onPressed: () => _generatePDF(data, action: 'download'),
               ),
               IconButton(
-                tooltip: 'Print PDF',
                 icon: const Icon(
                   Icons.print_outlined,
                   color: Colors.green,
@@ -393,14 +437,12 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  // --- LOGIC ---
-
+  // --- LOGIC: PDF GENERATION (UPDATED) ---
   Future<void> _generatePDF(
     Map<String, dynamic> data, {
     String action = 'print',
   }) async {
     final pdf = pw.Document();
-
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(data['userId'])
@@ -470,15 +512,12 @@ class HomePage extends StatelessWidget {
                     pw.TableRow(
                       children: [
                         _pdfLabelValue("EMPLOYEE:", employeeName),
-                        _pdfLabelValue("NO:", employeeId),
+                        _pdfLabelValue("EMP NO:", employeeId),
                       ],
                     ),
                     pw.TableRow(
                       children: [
-                        _pdfLabelValue(
-                          "POSITION / DEPT:",
-                          positionDeptCombined,
-                        ),
+                        _pdfLabelValue("FUND CLASS:", fundClass),
                         _pdfLabelValue("DATE:", dateStr),
                       ],
                     ),
@@ -487,10 +526,6 @@ class HomePage extends StatelessWidget {
                 pw.SizedBox(height: 10),
                 pw.Table(
                   border: pw.TableBorder.all(color: PdfColors.black),
-                  columnWidths: {
-                    0: const pw.FlexColumnWidth(3),
-                    1: const pw.FlexColumnWidth(1),
-                  },
                   children: [
                     pw.TableRow(
                       decoration: const pw.BoxDecoration(
@@ -528,7 +563,7 @@ class HomePage extends StatelessWidget {
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
                           child: pw.Text(
-                            NumberFormat('#,##0.00').format(data['amount']),
+                            "PHP ${NumberFormat('#,##0.00').format(data['amount'])}",
                             textAlign: pw.TextAlign.right,
                           ),
                         ),
@@ -537,6 +572,7 @@ class HomePage extends StatelessWidget {
                   ],
                 ),
                 pw.SizedBox(height: 40),
+                // --- Updated Signature Block Section ---
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
@@ -548,7 +584,10 @@ class HomePage extends StatelessWidget {
                   ],
                 ),
                 pw.SizedBox(height: 30),
-                _pdfSignatureBlock("Released by:", ""),
+                _pdfSignatureBlock(
+                  "Released by:",
+                  "Disbursing Officer / Cashier",
+                ),
               ],
             ),
           );
@@ -568,46 +607,7 @@ class HomePage extends StatelessWidget {
     }
   }
 
-  pw.Widget _pdfLabelValue(String label, String value) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 4),
-      child: pw.RichText(
-        text: pw.TextSpan(
-          children: [
-            pw.TextSpan(
-              text: "$label ",
-              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 10)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  pw.Widget _pdfSignatureBlock(String label, String subLabel) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          label,
-          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 25),
-        pw.Container(
-          width: 180,
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(
-              bottom: pw.BorderSide(color: PdfColors.black, width: 1),
-            ),
-          ),
-        ),
-        if (subLabel.isNotEmpty)
-          pw.Text(subLabel, style: const pw.TextStyle(fontSize: 8)),
-      ],
-    );
-  }
-
+  // --- UI: FORM MODAL ---
   void _showApplyPopup(
     BuildContext context,
     String uid, {
@@ -626,6 +626,8 @@ class HomePage extends StatelessWidget {
     final purposeController = TextEditingController(
       text: existingData != null ? existingData['purpose'] : "",
     );
+
+    String selectedFundClass = existingData?['fundClassification'] ?? '1';
 
     if (!context.mounted) return;
 
@@ -735,11 +737,13 @@ class HomePage extends StatelessWidget {
     );
   }
 
+  // --- LOGIC: SUBMISSION ---
   Future<void> _submit(
     BuildContext context,
     String uid,
     String amount,
-    String purpose, {
+    String purpose,
+    String fundClass, {
     String? editDocId,
     String? existingStatus,
     String? existingRefId,
@@ -750,6 +754,7 @@ class HomePage extends StatelessWidget {
       'userId': uid,
       'amount': double.tryParse(amount) ?? 0,
       'purpose': purpose,
+      'fundClassification': fundClass,
       'status': 'Pending',
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -775,6 +780,7 @@ class HomePage extends StatelessWidget {
     if (context.mounted) Navigator.pop(context);
   }
 
+  // --- SHARED UI HELPERS ---
   Widget _buildEmptyState() {
     return Column(
       children: [
@@ -807,29 +813,43 @@ class HomePage extends StatelessWidget {
     ),
   );
 
-  List<PopupMenuEntry<String>> _buildMenuItems(String uid) {
-    return [
-      PopupMenuItem(
-        enabled: false,
-        child: FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
-          builder: (context, snapshot) {
-            String name = "User";
-            if (snapshot.hasData && snapshot.data!.exists) {
-              name = snapshot.data!['firstName'] ?? "User";
-            }
-            return Text(
-              "Hi, $name",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            );
-          },
+  pw.Widget _pdfLabelValue(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.RichText(
+        text: pw.TextSpan(
+          children: [
+            pw.TextSpan(
+              text: "$label ",
+              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 10)),
+          ],
         ),
       ),
-      const PopupMenuDivider(),
-      const PopupMenuItem(value: 'logout', child: Text("Log Out")),
-    ];
+    );
+  }
+
+  pw.Widget _pdfSignatureBlock(String label, String subLabel) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 25),
+        pw.Container(
+          width: 180,
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(color: PdfColors.black, width: 1),
+            ),
+          ),
+        ),
+        if (subLabel.isNotEmpty)
+          pw.Text(subLabel, style: const pw.TextStyle(fontSize: 8)),
+      ],
+    );
   }
 }

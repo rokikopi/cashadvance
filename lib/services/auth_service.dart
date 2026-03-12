@@ -5,49 +5,49 @@ import 'package:flutter/foundation.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Centralize the GoogleSignIn configuration here
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: kIsWeb
-        ? '149500606282-bv0krkbqdji6pps6mt8mqkfhdo4p2d1d.apps.googleusercontent.com'
-        : null,
-    scopes: ['email', 'profile'],
-  );
+  // Stable constructor for version 6.2.1
+  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
 
   User? get currentUser => _auth.currentUser;
-
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   Future<UserCredential?> signInWithGoogle() async {
     try {
       if (kIsWeb) {
+        // --- WEB POPUP LOGIC ---
         GoogleAuthProvider googleProvider = GoogleAuthProvider();
+
+        // select_account ensures the popup doesn't just "flash" and disappear
         googleProvider.setCustomParameters({'prompt': 'select_account'});
+
+        // Ensure persistence is local so the session stays after closing the tab
+        await _auth.setPersistence(Persistence.LOCAL);
+
+        // This opens the separate window.
+        // Execution waits here until the popup is closed or finished.
         return await _auth.signInWithPopup(googleProvider);
       } else {
-        // Trigger the authentication flow
+        // --- MOBILE LOGIC ---
         final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-        if (googleUser == null) return null; // User canceled the picker
+        if (googleUser == null) return null;
 
-        // Obtain the auth details from the request
         final GoogleSignInAuthentication googleAuth =
             await googleUser.authentication;
 
-        // Create a new credential
         final AuthCredential credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
         );
 
-        // Once signed in, return the UserCredential
         return await _auth.signInWithCredential(credential);
       }
     } catch (e) {
       debugPrint("Google Sign-In Error: $e");
-      rethrow; // Rethrow so the UI can catch it and show a SnackBar
+      // If you see "cross-origin-opener-policy", it's a browser header issue
+      rethrow;
     }
   }
 
-  // Standard Email/Password Sign In
   Future<UserCredential> signInWithEmail(String email, String password) async {
     try {
       return await _auth.signInWithEmailAndPassword(
@@ -62,12 +62,10 @@ class AuthService {
 
   Future<void> signOut() async {
     try {
-      // Sign out from Google (important to clear the session so the picker shows up next time)
-      if (await _googleSignIn.isSignedIn()) {
+      await _auth.signOut();
+      if (!kIsWeb) {
         await _googleSignIn.signOut();
       }
-      // Sign out from Firebase
-      await _auth.signOut();
     } catch (e) {
       debugPrint("Sign-Out Error: $e");
     }
