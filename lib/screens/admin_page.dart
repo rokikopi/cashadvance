@@ -4,9 +4,24 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cashadvance/theme/constants.dart';
+import 'package:cashadvance/services/notification_service.dart';
 
-class AdminPage extends StatelessWidget {
+class AdminPage extends StatefulWidget {
   const AdminPage({super.key});
+
+  @override
+  State<AdminPage> createState() => _AdminPageState();
+}
+
+class _AdminPageState extends State<AdminPage> {
+  final NotificationService _notificationService = NotificationService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen for new requests submitted by users
+    _notificationService.listenForAdminUpdates();
+  }
 
   // --- AUTH LOGIC ---
 
@@ -17,10 +32,100 @@ class AdminPage extends StatelessWidget {
     }
   }
 
+  // --- NOTIFICATION LOGIC (User Alerts) ---
+
+  Future<void> _sendNotificationToUser({
+    required String userId,
+    required String title,
+    required String message,
+    required String type,
+  }) async {
+    await FirebaseFirestore.instance.collection('notifications').add({
+      'userId': userId,
+      'title': title,
+      'message': message,
+      'type': type, // e.g., 'Approved' or 'Rejected'
+      'isRead': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  void _showAdminNotifications(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => ListenableBuilder(
+        listenable: _notificationService,
+        builder: (context, child) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "New Requests",
+                  style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                ),
+                if (_notificationService.adminNotifications.isNotEmpty)
+                  TextButton(
+                    onPressed: () =>
+                        _notificationService.clearAdminNotifications(),
+                    child: const Text(
+                      "Clear All",
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: _notificationService.adminNotifications.isEmpty
+                  ? const Text("No unread alerts.")
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _notificationService.adminNotifications.length,
+                      itemBuilder: (context, index) {
+                        final note =
+                            _notificationService.adminNotifications[index];
+                        return ListTile(
+                          title: Text(
+                            note.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          subtitle: Text(
+                            note.message,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          onTap: () {
+                            _notificationService.markAsRead(
+                              'admin_notifications',
+                              note.id,
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Close"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3, // For Pending, Approved, Rejected
+      length: 3,
       child: Scaffold(
         backgroundColor: const Color(0xFFF8F9FA),
         appBar: AppBar(
@@ -48,6 +153,19 @@ class AdminPage extends StatelessWidget {
             style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
           ),
           actions: [
+            ListenableBuilder(
+              listenable: _notificationService,
+              builder: (context, child) {
+                return IconButton(
+                  icon: Badge(
+                    label: Text(_notificationService.adminCount.toString()),
+                    isLabelVisible: _notificationService.adminCount > 0,
+                    child: const Icon(Icons.notifications_none_outlined),
+                  ),
+                  onPressed: () => _showAdminNotifications(context),
+                );
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
               onPressed: () => _showLogoutConfirmation(context),
@@ -65,7 +183,6 @@ class AdminPage extends StatelessWidget {
               _buildUserSection(context),
               const SizedBox(height: 24),
               _buildSectionHeader("Transaction History"),
-              // --- TAB BAR FOR FILTERING ---
               Container(
                 decoration: BoxDecoration(
                   color: Colors.grey[200],
@@ -87,9 +204,8 @@ class AdminPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              // --- TAB BAR VIEW CONTENT ---
               SizedBox(
-                height: 500, // Fixed height for the scrollable list area
+                height: 500,
                 child: TabBarView(
                   children: [
                     _buildApplicationsSection(context, "Pending"),
@@ -211,7 +327,6 @@ class AdminPage extends StatelessWidget {
     Map<String, dynamic> data,
     String status,
   ) {
-    // Determine Fund Class display from integer field
     final String fundClass = "Class ${data['fundClassification'] ?? '1'}";
 
     return Container(
@@ -228,7 +343,6 @@ class AdminPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Display Reference ID and Fund Classification
                 Row(
                   children: [
                     Container(
@@ -302,7 +416,6 @@ class AdminPage extends StatelessWidget {
               ],
             ),
           ),
-          // Actions
           if (status == "Pending") ...[
             IconButton(
               icon: const Icon(
@@ -310,25 +423,80 @@ class AdminPage extends StatelessWidget {
                 color: Colors.green,
                 size: 32,
               ),
-              onPressed: () => _confirmAction(context, docId, "Approved"),
+              onPressed: () => _confirmAction(context, docId, data, "Approved"),
             ),
             IconButton(
               icon: const Icon(Icons.cancel, color: Colors.redAccent, size: 32),
-              onPressed: () => _confirmAction(context, docId, "Rejected"),
+              onPressed: () => _confirmAction(context, docId, data, "Rejected"),
             ),
-          ] else ...[
+          ] else
             Icon(
               status == "Approved" ? Icons.verified : Icons.error_outline,
               color: status == "Approved" ? Colors.green : Colors.redAccent,
               size: 24,
             ),
-          ],
         ],
       ),
     );
   }
 
-  // --- POPUPS & DIALOGS ---
+  // --- DIALOGS & ACTIONS ---
+
+  void _confirmAction(
+    BuildContext context,
+    String docId,
+    Map<String, dynamic> data,
+    String status,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("$status Application?"),
+        content: Text("Mark this request as $status?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("No"),
+          ),
+          TextButton(
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('advances')
+                  .doc(docId)
+                  .update({
+                    'status': status,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  });
+
+              final String amount = NumberFormat(
+                '#,##0.00',
+              ).format(data['amount']);
+              final String ref = data['referenceId'] ?? 'N/A';
+
+              await _sendNotificationToUser(
+                userId: data['userId'],
+                title: "Application $status",
+                message: status == "Approved"
+                    ? "Your request for ₱$amount (REF: $ref) has been approved."
+                    : "Your request for ₱$amount (REF: $ref) was rejected.",
+                type: status,
+              );
+
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
+            child: Text(
+              "Yes, $status",
+              style: TextStyle(
+                color: status == "Approved" ? Colors.green : Colors.red,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showAllUsersPopup(
     BuildContext context,
@@ -362,71 +530,33 @@ class AdminPage extends StatelessWidget {
     String userId,
     Map<String, dynamic> data,
   ) {
-    final firstNameController = TextEditingController(
-      text: data['firstName'] ?? '',
-    );
-    final lastNameController = TextEditingController(
-      text: data['lastName'] ?? '',
-    );
-    final employeeIdController = TextEditingController(
-      text: data['employeeId'] ?? '',
-    );
-    final departmentController = TextEditingController(
-      text: data['department'] ?? '',
-    );
-    final positionController = TextEditingController(
-      text: data['position'] ?? '',
-    );
+    final fName = TextEditingController(text: data['firstName'] ?? '');
+    final lName = TextEditingController(text: data['lastName'] ?? '');
+    final empId = TextEditingController(text: data['employeeId'] ?? '');
+    final dept = TextEditingController(text: data['department'] ?? '');
+    final pos = TextEditingController(text: data['position'] ?? '');
     bool isAdmin = data['isAdmin'] ?? false;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: Text(
-            "Edit User Details",
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildEditField(firstNameController, "First Name"),
-                  _buildEditField(lastNameController, "Last Name"),
-                  _buildEditField(employeeIdController, "Employee ID"),
-                  _buildEditField(departmentController, "Department"),
-                  _buildEditField(positionController, "Position"),
-                  const SizedBox(height: 10),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: isAdmin
-                          ? Colors.amber.withValues(alpha: 0.1)
-                          : Colors.grey[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: SwitchListTile(
-                      title: const Text(
-                        "Admin Access",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Text(
-                        isAdmin
-                            ? "Has access to Dashboard"
-                            : "Standard Employee",
-                      ),
-                      value: isAdmin,
-                      activeThumbColor: Colors.amber,
-                      onChanged: (val) => setState(() => isAdmin = val),
-                    ),
-                  ),
-                ],
-              ),
+          title: const Text("Edit User Details"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildEditField(fName, "First Name"),
+                _buildEditField(lName, "Last Name"),
+                _buildEditField(empId, "Employee ID"),
+                _buildEditField(dept, "Department"),
+                _buildEditField(pos, "Position"),
+                SwitchListTile(
+                  title: const Text("Admin Access"),
+                  value: isAdmin,
+                  onChanged: (v) => setState(() => isAdmin = v),
+                ),
+              ],
             ),
           ),
           actions: [
@@ -435,27 +565,23 @@ class AdminPage extends StatelessWidget {
               child: const Text("Cancel"),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-              ),
               onPressed: () async {
                 await FirebaseFirestore.instance
                     .collection('users')
                     .doc(userId)
                     .update({
-                      'firstName': firstNameController.text.trim(),
-                      'lastName': lastNameController.text.trim(),
-                      'employeeId': employeeIdController.text.trim(),
-                      'department': departmentController.text.trim(),
-                      'position': positionController.text.trim(),
+                      'firstName': fName.text.trim(),
+                      'lastName': lName.text.trim(),
+                      'employeeId': empId.text.trim(),
+                      'department': dept.text.trim(),
+                      'position': pos.text.trim(),
                       'isAdmin': isAdmin,
                     });
-                if (context.mounted) Navigator.pop(context);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
               },
-              child: const Text(
-                "Save Changes",
-                style: TextStyle(color: Colors.white),
-              ),
+              child: const Text("Save"),
             ),
           ],
         ),
@@ -468,19 +594,14 @@ class AdminPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Logout"),
-        content: const Text(
-          "Are you sure you want to exit the Admin Dashboard?",
-        ),
+        content: const Text("Exit the Admin Dashboard?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text("Cancel"),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _handleLogout(context);
-            },
+            onPressed: () => _handleLogout(context),
             child: const Text("Logout", style: TextStyle(color: Colors.red)),
           ),
         ],
@@ -488,95 +609,27 @@ class AdminPage extends StatelessWidget {
     );
   }
 
-  void _confirmAction(BuildContext context, String docId, String status) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text("$status Application?"),
-        content: Text("Mark this request as $status?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("No"),
+  Widget _buildEditField(TextEditingController controller, String label) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: label,
+            border: const OutlineInputBorder(),
           ),
-          TextButton(
-            onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('advances')
-                  .doc(docId)
-                  .update({
-                    'status': status,
-                    'updatedAt': FieldValue.serverTimestamp(),
-                  });
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: Text(
-              "Yes, $status",
-              style: TextStyle(
-                color: status == "Approved" ? Colors.green : Colors.red,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- UI HELPERS ---
-
-  Widget _buildEditField(TextEditingController controller, String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: TextField(
-        controller: controller,
-        style: const TextStyle(fontSize: 14),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(fontSize: 13, color: Colors.grey),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 8,
-          ),
-          filled: true,
-          fillColor: Colors.grey[50],
         ),
-      ),
-    );
-  }
+      );
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0),
-      child: Text(
-        title,
-        style: GoogleFonts.inter(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textMain,
-        ),
-      ),
-    );
-  }
+  Widget _buildSectionHeader(String title) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 12.0),
+    child: Text(
+      title,
+      style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
+    ),
+  );
 
-  Widget _buildEmptyState(String message) {
-    return Center(
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(40.0),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.inbox_outlined, size: 40, color: Colors.grey.shade300),
-            const SizedBox(height: 8),
-            Text(message, style: const TextStyle(color: Colors.grey)),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildEmptyState(String message) => Center(
+    child: Text(message, style: const TextStyle(color: Colors.grey)),
+  );
 }

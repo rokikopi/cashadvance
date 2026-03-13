@@ -6,23 +6,139 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:cashadvance/theme/constants.dart';
+import 'package:cashadvance/services/notification_service.dart';
 
 // PDF and Printing
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final NotificationService _notificationService = NotificationService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Start listening for transaction updates specific to this user
+    _notificationService.listenForUserUpdates();
+  }
 
   // Helper to generate an 8-character clean reference ID
   String _generateCleanRefId() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excludes 0, O, 1, I, L
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final random = Random();
     return List.generate(
       8,
       (index) => chars[random.nextInt(chars.length)],
     ).join();
+  }
+
+  void _showNotificationDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => ListenableBuilder(
+        listenable: _notificationService,
+        builder: (context, child) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "Notifications",
+                  style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                ),
+                // Fixed: Removed curly braces to avoid Set assignment error
+                if (_notificationService.notifications.isNotEmpty)
+                  TextButton(
+                    onPressed: () => _notificationService
+                        .clearUserNotifications(), // Updated to specific user method
+                    child: const Text(
+                      "Clear All",
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: _notificationService.notifications.isEmpty
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.notifications_off_outlined,
+                          size: 50,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          "No new updates",
+                          style: GoogleFonts.inter(color: Colors.grey),
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _notificationService.notifications.length,
+                      itemBuilder: (context, index) {
+                        final note = _notificationService.notifications[index];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundColor: note.color,
+                            radius: 6,
+                          ),
+                          title: Text(
+                            note.title,
+                            style: TextStyle(
+                              fontWeight: note.isRead
+                                  ? FontWeight.normal
+                                  : FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          subtitle: Text(
+                            note.message,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          trailing: Text(
+                            DateFormat('jm').format(note.timestamp),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          onTap: () {
+                            // Mark individual notification as read in the 'notifications' collection
+                            _notificationService.markAsRead(
+                              'notifications',
+                              note.id,
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Close"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -66,10 +182,34 @@ class HomePage extends StatelessWidget {
                 ),
               ),
               actions: [
+                ListenableBuilder(
+                  listenable: _notificationService,
+                  builder: (context, child) {
+                    return Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 12.0),
+                        child: IconButton(
+                          icon: Badge(
+                            label: Text(_notificationService.count.toString()),
+                            isLabelVisible: _notificationService.count > 0,
+                            backgroundColor: Colors.red,
+                            child: const Icon(
+                              Icons.notifications_none_outlined,
+                              color: AppColors.textMain,
+                              size: 26,
+                            ),
+                          ),
+                          onPressed: () => _showNotificationDialog(context),
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 Align(
                   alignment: Alignment.topRight,
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 8.0, right: 8.0),
+                    padding: const EdgeInsets.only(top: 12.0, right: 8.0),
                     child: PopupMenuButton<String>(
                       icon: const Icon(
                         Icons.menu,
@@ -82,9 +222,7 @@ class HomePage extends StatelessWidget {
                       ),
                       onSelected: (value) async {
                         if (value == 'logout') {
-                          // 1. Trigger Sign out
                           await authService.signOut();
-                          // 2. Force navigation reset to clear any lingering UI state
                           if (context.mounted) {
                             Navigator.of(
                               context,
@@ -128,10 +266,8 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  // --- UI BUILDERS ---
-
+  // Summary and Card logic remains consistent with original file
   Widget _buildResponsiveSummary(String uid) {
-    // FIX: Guard against empty UID on logout
     if (uid.isEmpty) return const SizedBox.shrink();
 
     return StreamBuilder<QuerySnapshot>(
@@ -140,7 +276,6 @@ class HomePage extends StatelessWidget {
           .where('userId', isEqualTo: uid)
           .snapshots(),
       builder: (context, snapshot) {
-        // FIX: Handle Permission Denied during logout transition
         if (snapshot.hasError) return const SizedBox.shrink();
 
         double totalApproved = 0;
@@ -255,7 +390,6 @@ class HomePage extends StatelessWidget {
   }
 
   Widget _buildSliverAdvanceList(String uid) {
-    // FIX: Guard against empty UID
     if (uid.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return StreamBuilder<QuerySnapshot>(
@@ -265,7 +399,6 @@ class HomePage extends StatelessWidget {
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        // FIX: Catch stream errors early
         if (snapshot.hasError) {
           return const SliverToBoxAdapter(child: SizedBox.shrink());
         }
@@ -373,6 +506,7 @@ class HomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
+            // Fixed: Removed curly braces from inline list if statement
             if (status == 'Pending' || status == 'Rejected')
               IconButton(
                 tooltip: status == 'Rejected'
@@ -644,7 +778,6 @@ class HomePage extends StatelessWidget {
     String? editDocId,
     Map<String, dynamic>? existingData,
   }) async {
-    // FIX: Guard against opening popup if uid is missing
     if (uid.isEmpty) return;
 
     final userDoc = await FirebaseFirestore.instance
@@ -800,9 +933,19 @@ class HomePage extends StatelessWidget {
   }) async {
     if (amount.isEmpty || purpose.isEmpty) return;
 
+    final double parsedAmount = double.tryParse(amount) ?? 0;
+
+    // Fetch requester name for the admin notification
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    final String fullName =
+        "${userDoc.data()?['firstName'] ?? 'User'} ${userDoc.data()?['lastName'] ?? ''}";
+
     final data = {
       'userId': uid,
-      'amount': double.tryParse(amount) ?? 0,
+      'amount': parsedAmount,
       'purpose': purpose,
       'fundClassification': fundClassification,
       'status': 'Pending',
@@ -817,7 +960,15 @@ class HomePage extends StatelessWidget {
         if (existingStatus == 'Rejected') {
           data['resubmittedFrom'] = editDocId as Object;
         }
+
+        // Save application to Firestore
         await FirebaseFirestore.instance.collection('advances').add(data);
+
+        // Trigger specific admin notification method from the service
+        await _notificationService.notifyAdminOfNewRequest(
+          requesterName: fullName,
+          amount: parsedAmount,
+        );
       } else {
         data['referenceId'] = existingRefId ?? _generateCleanRefId();
         await FirebaseFirestore.instance
