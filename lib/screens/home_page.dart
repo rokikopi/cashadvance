@@ -50,21 +50,53 @@ class _HomePageState extends State<HomePage> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
-            title: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            title: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  "Notifications",
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Notifications",
+                      style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
-                // Fixed: Removed curly braces to avoid Set assignment error
+                // NEW: Action buttons for Mark All as Read and Clear All
                 if (_notificationService.notifications.isNotEmpty)
-                  TextButton(
-                    onPressed: () => _notificationService
-                        .clearUserNotifications(), // Updated to specific user method
-                    child: const Text(
-                      "Clear All",
-                      style: TextStyle(color: Colors.red),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () =>
+                              _notificationService.markAllUserRead(),
+                          icon: const Icon(Icons.done_all, size: 16),
+                          label: const Text(
+                            "Read All",
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: () =>
+                              _notificationService.clearUserNotifications(),
+                          icon: const Icon(
+                            Icons.delete_sweep_outlined,
+                            size: 16,
+                            color: Colors.red,
+                          ),
+                          label: const Text(
+                            "Clear All",
+                            style: TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],
@@ -119,7 +151,7 @@ class _HomePageState extends State<HomePage> {
                             ),
                           ),
                           onTap: () {
-                            // Mark individual notification as read in the 'notifications' collection
+                            // Mark individual notification as read
                             _notificationService.markAsRead(
                               'notifications',
                               note.id,
@@ -129,12 +161,6 @@ class _HomePageState extends State<HomePage> {
                       },
                     ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Close"),
-              ),
-            ],
           );
         },
       ),
@@ -266,7 +292,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Summary and Card logic remains consistent with original file
   Widget _buildResponsiveSummary(String uid) {
     if (uid.isEmpty) return const SizedBox.shrink();
 
@@ -506,7 +531,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(width: 4),
-            // Fixed: Removed curly braces from inline list if statement
             if (status == 'Pending' || status == 'Rejected')
               IconButton(
                 tooltip: status == 'Rejected'
@@ -549,8 +573,6 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-
-  // --- LOGIC ---
 
   Future<void> _generatePDF(
     Map<String, dynamic> data, {

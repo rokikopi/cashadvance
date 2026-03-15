@@ -60,20 +60,53 @@ class _AdminPageState extends State<AdminPage> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
-            title: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            title: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  "New Requests",
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "New Requests",
+                      style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
+                // NEW: Mark All as Read and Clear All for Admin
                 if (_notificationService.adminNotifications.isNotEmpty)
-                  TextButton(
-                    onPressed: () =>
-                        _notificationService.clearAdminNotifications(),
-                    child: const Text(
-                      "Clear All",
-                      style: TextStyle(color: Colors.red),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () =>
+                              _notificationService.markAllAdminRead(),
+                          icon: const Icon(Icons.done_all, size: 16),
+                          label: const Text(
+                            "Read All",
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: () =>
+                              _notificationService.clearAdminNotifications(),
+                          icon: const Icon(
+                            Icons.delete_sweep_outlined,
+                            size: 16,
+                            color: Colors.red,
+                          ),
+                          label: const Text(
+                            "Clear All",
+                            style: TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],
@@ -81,7 +114,21 @@ class _AdminPageState extends State<AdminPage> {
             content: SizedBox(
               width: double.maxFinite,
               child: _notificationService.adminNotifications.isEmpty
-                  ? const Text("No unread alerts.")
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.notifications_off_outlined,
+                          size: 50,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          "No unread alerts",
+                          style: GoogleFonts.inter(color: Colors.grey),
+                        ),
+                      ],
+                    )
                   : ListView.builder(
                       shrinkWrap: true,
                       itemCount: _notificationService.adminNotifications.length,
@@ -89,10 +136,21 @@ class _AdminPageState extends State<AdminPage> {
                         final note =
                             _notificationService.adminNotifications[index];
                         return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundColor: note.color.withValues(alpha: 0.1),
+                            child: Icon(
+                              Icons.person_outline,
+                              color: note.color,
+                              size: 18,
+                            ),
+                          ),
                           title: Text(
                             note.title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
+                            style: TextStyle(
+                              fontWeight: note.isRead
+                                  ? FontWeight.normal
+                                  : FontWeight.bold,
                               fontSize: 14,
                             ),
                           ),
@@ -110,12 +168,6 @@ class _AdminPageState extends State<AdminPage> {
                       },
                     ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Close"),
-              ),
-            ],
           );
         },
       ),
@@ -160,6 +212,7 @@ class _AdminPageState extends State<AdminPage> {
                   icon: Badge(
                     label: Text(_notificationService.adminCount.toString()),
                     isLabelVisible: _notificationService.adminCount > 0,
+                    backgroundColor: Colors.red,
                     child: const Icon(Icons.notifications_none_outlined),
                   ),
                   onPressed: () => _showAdminNotifications(context),

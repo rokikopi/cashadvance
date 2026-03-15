@@ -9,6 +9,7 @@ class AppNotification {
   final DateTime timestamp;
   final Color color;
   final bool isRead;
+  final bool isCleared;
 
   AppNotification({
     required this.id,
@@ -17,21 +18,19 @@ class AppNotification {
     required this.timestamp,
     required this.color,
     this.isRead = false,
+    this.isCleared = false,
   });
 }
 
 class NotificationService extends ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // Separate lists for User and Admin notifications
   final List<AppNotification> _userNotifications = [];
   final List<AppNotification> _adminNotifications = [];
 
-  // Getters for Users
   List<AppNotification> get notifications => _userNotifications;
   int get count => _userNotifications.where((n) => !n.isRead).length;
 
-  // Getters for Admins (Matches the calls in your AdminPage)
   List<AppNotification> get adminNotifications => _adminNotifications;
   int get adminCount => _adminNotifications.where((n) => !n.isRead).length;
 
@@ -47,6 +46,7 @@ class NotificationService extends ChangeNotifier {
           "$requesterName submitted a request for ₱${amount.toStringAsFixed(2)}.",
       'createdAt': FieldValue.serverTimestamp(),
       'isRead': false,
+      'isCleared': false,
     });
   }
 
@@ -63,11 +63,84 @@ class NotificationService extends ChangeNotifier {
       'status': status,
       'createdAt': FieldValue.serverTimestamp(),
       'isRead': false,
+      'isCleared': false,
     });
   }
 
   Future<void> markAsRead(String collection, String docId) async {
     await _db.collection(collection).doc(docId).update({'isRead': true});
+  }
+
+  // --- BATCH UPDATES (Restored and Corrected Names) ---
+
+  /// Marks all current user notifications as read in Firestore
+  Future<void> markAllUserRead() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final snapshots = await _db
+        .collection('notifications')
+        .where('userId', isEqualTo: user.uid)
+        .where('isRead', isEqualTo: false)
+        .where('isCleared', isEqualTo: false)
+        .get();
+
+    if (snapshots.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (var doc in snapshots.docs) {
+      batch.update(doc.reference, {'isRead': true});
+    }
+    await batch.commit();
+  }
+
+  /// Marks all admin notifications as read in Firestore
+  Future<void> markAllAdminRead() async {
+    final snapshots = await _db
+        .collection('admin_notifications')
+        .where('isRead', isEqualTo: false)
+        .where('isCleared', isEqualTo: false)
+        .get();
+
+    if (snapshots.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (var doc in snapshots.docs) {
+      batch.update(doc.reference, {'isRead': true});
+    }
+    await batch.commit();
+  }
+
+  /// Sets isCleared: true for all user notifications (Used by Home Page)
+  Future<void> clearUserNotifications() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final snapshots = await _db
+        .collection('notifications')
+        .where('userId', isEqualTo: user.uid)
+        .where('isCleared', isEqualTo: false)
+        .get();
+
+    if (snapshots.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (var doc in snapshots.docs) {
+      batch.update(doc.reference, {'isCleared': true});
+    }
+    await batch.commit();
+  }
+
+  /// Sets isCleared: true for all admin notifications (Used by Admin Page)
+  Future<void> clearAdminNotifications() async {
+    final snapshots = await _db
+        .collection('admin_notifications')
+        .where('isCleared', isEqualTo: false)
+        .get();
+
+    if (snapshots.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (var doc in snapshots.docs) {
+      batch.update(doc.reference, {'isCleared': true});
+    }
+    await batch.commit();
   }
 
   // --- REAL-TIME LISTENERS ---
@@ -79,6 +152,7 @@ class NotificationService extends ChangeNotifier {
     _db
         .collection('notifications')
         .where('userId', isEqualTo: user.uid)
+        .where('isCleared', isEqualTo: false)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .listen((snapshot) {
@@ -86,7 +160,6 @@ class NotificationService extends ChangeNotifier {
           for (var doc in snapshot.docs) {
             final data = doc.data();
             final status = data['status'] ?? 'pending';
-
             _userNotifications.add(
               AppNotification(
                 id: doc.id,
@@ -96,6 +169,7 @@ class NotificationService extends ChangeNotifier {
                     (data['createdAt'] as Timestamp?)?.toDate() ??
                     DateTime.now(),
                 isRead: data['isRead'] ?? false,
+                isCleared: data['isCleared'] ?? false,
                 color: status.toString().toLowerCase() == 'approved'
                     ? Colors.green
                     : Colors.red,
@@ -109,13 +183,13 @@ class NotificationService extends ChangeNotifier {
   void listenForAdminUpdates() {
     _db
         .collection('admin_notifications')
+        .where('isCleared', isEqualTo: false)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .listen((snapshot) {
           _adminNotifications.clear();
           for (var doc in snapshot.docs) {
             final data = doc.data();
-
             _adminNotifications.add(
               AppNotification(
                 id: doc.id,
@@ -125,23 +199,12 @@ class NotificationService extends ChangeNotifier {
                     (data['createdAt'] as Timestamp?)?.toDate() ??
                     DateTime.now(),
                 isRead: data['isRead'] ?? false,
+                isCleared: data['isCleared'] ?? false,
                 color: const Color(0xFF2E5BFF),
               ),
             );
           }
           notifyListeners();
         });
-  }
-
-  // --- CLEAR ACTIONS ---
-
-  void clearUserNotifications() {
-    _userNotifications.clear();
-    notifyListeners();
-  }
-
-  void clearAdminNotifications() {
-    _adminNotifications.clear();
-    notifyListeners();
   }
 }
