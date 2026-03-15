@@ -1,5 +1,4 @@
 import 'package:cashadvance/screens/login_page.dart';
-import 'package:cashadvance/screens/splash_page.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -30,7 +29,7 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
   bool _isGoogleUser = false;
-  bool _isLoginHovered = false; // Hover state restored
+  bool _isLoginHovered = false;
 
   @override
   void initState() {
@@ -46,15 +45,18 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _checkRedirectResult() async {
+    setState(() => _isLoading = true);
     try {
-      final UserCredential userCredential = await FirebaseAuth.instance
+      // ignore: unnecessary_nullable_for_final_variable_declarations
+      final UserCredential? userCredential = await FirebaseAuth.instance
           .getRedirectResult();
-      if (userCredential.user != null) {
-        _applyGoogleData(userCredential.user!);
+      if (userCredential?.user != null) {
+        _applyGoogleData(userCredential!.user!);
+      } else {
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
       debugPrint("Registration Redirect Error: $e");
-    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -70,6 +72,7 @@ class _RegisterPageState extends State<RegisterPage> {
       _pwController.text = "GOOGLE_USER_AUTH";
       _confirmPwController.text = "GOOGLE_USER_AUTH";
       _isGoogleUser = true;
+      _isLoading = false;
     });
     _showSuccess("Google account linked. Please provide employee details.");
   }
@@ -89,15 +92,39 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _handleGoogleAutofill() async {
     setState(() => _isLoading = true);
+
     try {
       final authService = AuthService();
-      final userCredential = await authService.signInWithGoogle();
-      if (userCredential != null) {
-        _applyGoogleData(userCredential.user!);
+      final UserCredential? userCredential = await authService
+          .signInWithGoogle();
+
+      if (userCredential?.user != null) {
+        _applyGoogleData(userCredential!.user!);
+      } else {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    } on FirebaseAuthException catch (e) {
+      debugPrint("Google Error: $e");
+      if (mounted) {
+        // Firebase catches popup close immediately with this error code
+        if (e.code == 'popup-closed-by-user') {
+          _showError("Sign-in cancelled. Please try again.");
+        } else {
+          _showError("Google Sign-In failed. Please try again.");
+        }
+        setState(() => _isLoading = false);
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-      _showError("Google Error: $e");
+      debugPrint("Google Error: $e");
+      if (mounted) {
+        // Fallback for any other errors
+        if (e.toString().contains('popup') || e.toString().contains('closed')) {
+          _showError("Sign-in cancelled. Please try again.");
+        } else {
+          _showError("Google Sign-In failed. Please try again.");
+        }
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -151,14 +178,10 @@ class _RegisterPageState extends State<RegisterPage> {
       _showSuccess("Registration Complete!");
 
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const SplashPage()),
-          (route) => false,
-        );
+        Navigator.of(context).pushReplacementNamed('/');
       }
     } catch (e) {
       _showError(e.toString());
-    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -169,6 +192,7 @@ class _RegisterPageState extends State<RegisterPage> {
         content: Text(msg),
         backgroundColor: Colors.redAccent,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -179,6 +203,7 @@ class _RegisterPageState extends State<RegisterPage> {
         content: Text(msg),
         backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -198,173 +223,178 @@ class _RegisterPageState extends State<RegisterPage> {
                 color: AppColors.textMain,
                 size: 20,
               ),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SplashPage()),
-              ),
+              onPressed: () => Navigator.of(context).pop(),
             ),
           ),
           body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 30.0),
-              child: Column(
-                children: [
-                  Image.asset(
-                    'assets/images/logo.png',
-                    height: 80,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.account_balance_wallet,
-                      size: 80,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    "Create Account",
-                    style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textMain,
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                  _buildTextField(
-                    label: "First Name",
-                    icon: Icons.person_outline,
-                    controller: _fNameController,
-                    enabled: !_isGoogleUser,
-                  ),
-                  _buildTextField(
-                    label: "Last Name",
-                    icon: Icons.person_outline,
-                    controller: _lNameController,
-                    enabled: !_isGoogleUser,
-                  ),
-                  _buildTextField(
-                    label: "Email",
-                    icon: Icons.email_outlined,
-                    controller: _emailController,
-                    enabled: !_isGoogleUser,
-                  ),
-                  _buildTextField(
-                    label: "Employee ID",
-                    icon: Icons.badge_outlined,
-                    controller: _empIdController,
-                  ),
-                  _buildTextField(
-                    label: "Department",
-                    icon: Icons.business_outlined,
-                    controller: _deptController,
-                  ),
-                  _buildTextField(
-                    label: "Position",
-                    icon: Icons.work_outline,
-                    controller: _posController,
-                  ),
-                  if (!_isGoogleUser) ...[
-                    _buildTextField(
-                      label: "Password",
-                      icon: Icons.lock_outline,
-                      controller: _pwController,
-                      isPassword: true,
-                      isVisible: _isPasswordVisible,
-                      onToggleVisibility: () => setState(
-                        () => _isPasswordVisible = !_isPasswordVisible,
-                      ),
-                    ),
-                    _buildTextField(
-                      label: "Confirm Password",
-                      icon: Icons.lock_reset_outlined,
-                      controller: _confirmPwController,
-                      isPassword: true,
-                      isVisible: _isConfirmPasswordVisible,
-                      onToggleVisibility: () => setState(
-                        () => _isConfirmPasswordVisible =
-                            !_isConfirmPasswordVisible,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton(
-                      onPressed: _submitRegistration,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        "Sign Up",
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (!_isGoogleUser) ...[
-                    const SizedBox(height: 15),
-                    _buildGoogleButton(),
-                  ],
-                  const SizedBox(height: 25),
-
-                  // --- HOVER LOGIC RESTORED HERE ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+            child: Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 500),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 30.0),
+                  child: Column(
                     children: [
+                      Image.asset(
+                        'assets/images/logo.png',
+                        height: 80,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(
+                              Icons.account_balance_wallet,
+                              size: 80,
+                              color: AppColors.primary,
+                            ),
+                      ),
+                      const SizedBox(height: 20),
                       Text(
-                        "Already have an account? ",
+                        "Create Account",
                         style: GoogleFonts.inter(
-                          color: AppColors.textSecondary,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textMain,
                         ),
                       ),
-                      MouseRegion(
-                        onEnter: (_) => setState(() => _isLoginHovered = true),
-                        onExit: (_) => setState(() => _isLoginHovered = false),
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const LoginPage(),
-                              ),
-                            );
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
+                      const SizedBox(height: 30),
+                      _buildTextField(
+                        label: "First Name",
+                        icon: Icons.person_outline,
+                        controller: _fNameController,
+                        enabled: !_isGoogleUser,
+                      ),
+                      _buildTextField(
+                        label: "Last Name",
+                        icon: Icons.person_outline,
+                        controller: _lNameController,
+                        enabled: !_isGoogleUser,
+                      ),
+                      _buildTextField(
+                        label: "Email",
+                        icon: Icons.email_outlined,
+                        controller: _emailController,
+                        enabled: !_isGoogleUser,
+                      ),
+                      _buildTextField(
+                        label: "Employee ID",
+                        icon: Icons.badge_outlined,
+                        controller: _empIdController,
+                      ),
+                      _buildTextField(
+                        label: "Department",
+                        icon: Icons.business_outlined,
+                        controller: _deptController,
+                      ),
+                      _buildTextField(
+                        label: "Position",
+                        icon: Icons.work_outline,
+                        controller: _posController,
+                      ),
+                      if (!_isGoogleUser) ...[
+                        _buildTextField(
+                          label: "Password",
+                          icon: Icons.lock_outline,
+                          controller: _pwController,
+                          isPassword: true,
+                          isVisible: _isPasswordVisible,
+                          onToggleVisibility: () => setState(
+                            () => _isPasswordVisible = !_isPasswordVisible,
+                          ),
+                        ),
+                        _buildTextField(
+                          label: "Confirm Password",
+                          icon: Icons.lock_reset_outlined,
+                          controller: _confirmPwController,
+                          isPassword: true,
+                          isVisible: _isConfirmPasswordVisible,
+                          onToggleVisibility: () => setState(
+                            () => _isConfirmPasswordVisible =
+                                !_isConfirmPasswordVisible,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _submitRegistration,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            decoration: BoxDecoration(
-                              color: _isLoginHovered
-                                  ? AppColors.primary.withValues(alpha: 0.08)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              "Log In",
-                              style: GoogleFonts.inter(
-                                color: _isLoginHovered
-                                    ? AppColors.primaryHover
-                                    : AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            "Sign Up",
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
                         ),
                       ),
+                      if (!_isGoogleUser) ...[
+                        const SizedBox(height: 15),
+                        _buildGoogleButton(),
+                      ],
+                      const SizedBox(height: 25),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "Already have an account? ",
+                            style: GoogleFonts.inter(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          MouseRegion(
+                            onEnter: (_) =>
+                                setState(() => _isLoginHovered = true),
+                            onExit: (_) =>
+                                setState(() => _isLoginHovered = false),
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const LoginPage(),
+                                  ),
+                                );
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _isLoginHovered
+                                      ? AppColors.primary.withValues(
+                                          alpha: 0.08,
+                                        )
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  "Log In",
+                                  style: GoogleFonts.inter(
+                                    color: _isLoginHovered
+                                        ? AppColors.primaryHover
+                                        : AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 40),
                     ],
                   ),
-                  const SizedBox(height: 40),
-                ],
+                ),
               ),
             ),
           ),
@@ -433,7 +463,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Widget _buildGoogleButton() {
     return OutlinedButton(
-      onPressed: _handleGoogleAutofill,
+      onPressed: _isLoading ? null : _handleGoogleAutofill,
       style: OutlinedButton.styleFrom(
         fixedSize: const Size(double.infinity, 55),
         side: BorderSide(color: Colors.grey[300]!),

@@ -1,10 +1,8 @@
-import 'package:cashadvance/screens/splash_page.dart';
 import 'package:cashadvance/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cashadvance/theme/constants.dart';
-import 'package:cashadvance/screens/register_page.dart';
 import 'package:flutter/foundation.dart';
 
 class LoginPage extends StatefulWidget {
@@ -20,8 +18,7 @@ class _LoginPageState extends State<LoginPage> {
   final _pwController = TextEditingController();
 
   bool _isPasswordVisible = false;
-  // Set to true on Web initially to handle the redirect check silently
-  bool _isLoading = kIsWeb;
+  bool _isLoading = false;
   bool _isForgotHovered = false;
   bool _isSignUpHovered = false;
 
@@ -35,20 +32,20 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _checkRedirectResult() async {
     try {
-      // Catch the user object after a browser redirect
-      final UserCredential userCredential = await FirebaseAuth.instance
+      // ignore: unnecessary_nullable_for_final_variable_declarations
+      final UserCredential? userCredential = await FirebaseAuth.instance
           .getRedirectResult();
 
-      if (userCredential.user != null) {
+      if (userCredential?.user != null) {
         debugPrint(
-          "Redirect sign-in successful: ${userCredential.user!.email}",
+          "Redirect sign-in successful: ${userCredential!.user!.email}",
         );
-        // No manual navigation needed; AuthGate in main.dart is listening.
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/');
+        }
       }
     } catch (e) {
       debugPrint("Redirect Result Error: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -72,7 +69,10 @@ class _LoginPageState extends State<LoginPage> {
         _emailController.text.trim(),
         _pwController.text.trim(),
       );
-      // Success! AuthGate will now swap this screen for Home/Admin automatically.
+
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/');
+      }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         _showError(_friendlyAuthError(e.code));
@@ -88,13 +88,34 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _handleGoogleLogin() async {
     setState(() => _isLoading = true);
+
     try {
       await _authService.signInWithGoogle();
-      // On Web, the page will redirect. On Mobile, the stream will update.
+
+      if (!kIsWeb && mounted) {
+        Navigator.of(context).pushReplacementNamed('/');
+      }
+      // On web, the page will redirect on success, so no need to navigate
+    } on FirebaseAuthException catch (e) {
+      debugPrint("Google Login Error: $e");
+      if (mounted) {
+        // Firebase catches popup close immediately with this error code
+        if (e.code == 'popup-closed-by-user') {
+          _showError("Sign-in cancelled. Please try again.");
+        } else {
+          _showError("Google Sign-In failed. Please try again.");
+        }
+        setState(() => _isLoading = false);
+      }
     } catch (e) {
       debugPrint("Google Login Error: $e");
       if (mounted) {
-        _showError("Google Sign-In failed. Please try again.");
+        // Fallback for any other errors
+        if (e.toString().contains('popup') || e.toString().contains('closed')) {
+          _showError("Sign-in cancelled. Please try again.");
+        } else {
+          _showError("Google Sign-In failed. Please try again.");
+        }
         setState(() => _isLoading = false);
       }
     }
@@ -129,6 +150,8 @@ class _LoginPageState extends State<LoginPage> {
         return "Please enter a valid email address.";
       case 'too-many-requests':
         return "Too many attempts. Please try again later.";
+      case 'popup-closed-by-user':
+        return "Sign-in cancelled. Please try again.";
       default:
         return "Authentication failed ($code).";
     }
@@ -140,6 +163,7 @@ class _LoginPageState extends State<LoginPage> {
         content: Text(msg),
         backgroundColor: Colors.redAccent,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -150,6 +174,7 @@ class _LoginPageState extends State<LoginPage> {
         content: Text(msg),
         backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -169,189 +194,197 @@ class _LoginPageState extends State<LoginPage> {
                 color: AppColors.textMain,
                 size: 20,
               ),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SplashPage()),
-              ),
+              onPressed: () =>
+                  Navigator.pushReplacementNamed(context, '/splash'),
             ),
           ),
           body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 30.0),
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  Image.asset(
-                    'assets/images/logo.png',
-                    height: 80,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.account_balance_wallet,
-                      size: 80,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    "Welcome Back",
-                    style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textMain,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    "Log in to continue managing your finances.",
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  _buildTextField(
-                    label: "Email",
-                    icon: Icons.email_outlined,
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  _buildTextField(
-                    label: "Password",
-                    icon: Icons.lock_outline,
-                    controller: _pwController,
-                    isPassword: true,
-                    isVisible: _isPasswordVisible,
-                    onToggleVisibility: () => setState(
-                      () => _isPasswordVisible = !_isPasswordVisible,
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: MouseRegion(
-                      onEnter: (_) => setState(() => _isForgotHovered = true),
-                      onExit: (_) => setState(() => _isForgotHovered = false),
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                        onTap: _handleForgotPassword,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _isForgotHovered
-                                ? AppColors.primary.withValues(alpha: 0.05)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            "Forgot Password?",
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: _isForgotHovered
-                                  ? AppColors.primaryHover
-                                  : AppColors.primary,
-                              fontWeight: _isForgotHovered
-                                  ? FontWeight.w700
-                                  : FontWeight.w600,
+            child: Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 450),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 30.0),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      Image.asset(
+                        'assets/images/logo.png',
+                        height: 80,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(
+                              Icons.account_balance_wallet,
+                              size: 80,
+                              color: AppColors.primary,
                             ),
-                          ),
-                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton(
-                      onPressed: _handleEmailLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        "Log In",
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  Row(
-                    children: [
-                      Expanded(child: Divider(color: Colors.grey[300])),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                        child: Text(
-                          "or",
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                      Expanded(child: Divider(color: Colors.grey[300])),
-                    ],
-                  ),
-                  const SizedBox(height: 15),
-                  _buildGoogleButton(),
-                  const SizedBox(height: 25),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+                      const SizedBox(height: 20),
                       Text(
-                        "Don't have an account? ",
+                        "Welcome Back",
                         style: GoogleFonts.inter(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textMain,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        "Log in to continue managing your finances.",
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
                           color: AppColors.textSecondary,
                         ),
                       ),
-                      MouseRegion(
-                        onEnter: (_) => setState(() => _isSignUpHovered = true),
-                        onExit: (_) => setState(() => _isSignUpHovered = false),
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const RegisterPage(),
-                            ),
-                          ),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _isSignUpHovered
-                                  ? AppColors.primary.withValues(alpha: 0.08)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              "Sign Up",
-                              style: GoogleFonts.inter(
-                                color: _isSignUpHovered
-                                    ? AppColors.primaryHover
-                                    : AppColors.primary,
-                                fontWeight: FontWeight.bold,
+                      const SizedBox(height: 40),
+                      _buildTextField(
+                        label: "Email",
+                        icon: Icons.email_outlined,
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      _buildTextField(
+                        label: "Password",
+                        icon: Icons.lock_outline,
+                        controller: _pwController,
+                        isPassword: true,
+                        isVisible: _isPasswordVisible,
+                        onToggleVisibility: () => setState(
+                          () => _isPasswordVisible = !_isPasswordVisible,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: MouseRegion(
+                          onEnter: (_) =>
+                              setState(() => _isForgotHovered = true),
+                          onExit: (_) =>
+                              setState(() => _isForgotHovered = false),
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap: _handleForgotPassword,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _isForgotHovered
+                                    ? AppColors.primary.withValues(alpha: 0.05)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                "Forgot Password?",
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: _isForgotHovered
+                                      ? AppColors.primaryHover
+                                      : AppColors.primary,
+                                  fontWeight: _isForgotHovered
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
+                      const SizedBox(height: 25),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _handleEmailLogin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            "Log In",
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: Colors.grey[300])),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12.0,
+                            ),
+                            child: Text(
+                              "or",
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          Expanded(child: Divider(color: Colors.grey[300])),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      _buildGoogleButton(),
+                      const SizedBox(height: 25),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "Don't have an account? ",
+                            style: GoogleFonts.inter(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          MouseRegion(
+                            onEnter: (_) =>
+                                setState(() => _isSignUpHovered = true),
+                            onExit: (_) =>
+                                setState(() => _isSignUpHovered = false),
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: () =>
+                                  Navigator.pushNamed(context, '/register'),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _isSignUpHovered
+                                      ? AppColors.primary.withValues(
+                                          alpha: 0.08,
+                                        )
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  "Sign Up",
+                                  style: GoogleFonts.inter(
+                                    color: _isSignUpHovered
+                                        ? AppColors.primaryHover
+                                        : AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -418,7 +451,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Widget _buildGoogleButton() {
     return OutlinedButton(
-      onPressed: _handleGoogleLogin,
+      onPressed: _isLoading ? null : _handleGoogleLogin,
       style: OutlinedButton.styleFrom(
         fixedSize: const Size(double.infinity, 55),
         side: BorderSide(color: Colors.grey[300]!),

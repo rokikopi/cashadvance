@@ -467,6 +467,8 @@ class _HomePageState extends State<HomePage> {
         : (status == 'Rejected' ? Colors.redAccent : Colors.orange);
 
     String fundDisplay = "Class ${data['fundClassification'] ?? '1'}";
+    bool isCleared =
+        data['isCleared'] ?? false; // MODIFIED: Track isCleared field
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -515,20 +517,40 @@ class _HomePageState extends State<HomePage> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                status,
-                style: TextStyle(
-                  color: statusColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 10,
+            Column(
+              // MODIFIED: Show Cleared status badge if Approved
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    status,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
                 ),
-              ),
+                if (status == 'Approved') ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    isCleared ? "CLEARED" : "UNCLEARED",
+                    style: TextStyle(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                      color: isCleared ? Colors.blue : Colors.grey,
+                    ),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(width: 4),
             if (status == 'Pending' || status == 'Rejected')
@@ -971,6 +993,8 @@ class _HomePageState extends State<HomePage> {
       'purpose': purpose,
       'fundClassification': fundClassification,
       'status': 'Pending',
+      'isCleared':
+          false, // MODIFIED: Added isCleared field to the initial submission data
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
@@ -986,7 +1010,8 @@ class _HomePageState extends State<HomePage> {
         // Save application to Firestore
         await FirebaseFirestore.instance.collection('advances').add(data);
 
-        // Trigger specific admin notification method from the service
+        // Trigger notification
+        // Note: isCleared: false is now part of the database record for this notification to reference
         await _notificationService.notifyAdminOfNewRequest(
           requesterName: fullName,
           amount: parsedAmount,
