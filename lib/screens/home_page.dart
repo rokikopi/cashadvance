@@ -26,11 +26,10 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // Start listening for transaction updates specific to this user
     _notificationService.listenForUserUpdates();
   }
 
-  // Helper to generate an 8-character clean reference ID
+  // 1. Helper to generate an 8-character clean reference ID
   String _generateCleanRefId() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final random = Random();
@@ -38,6 +37,205 @@ class _HomePageState extends State<HomePage> {
       8,
       (index) => chars[random.nextInt(chars.length)],
     ).join();
+  }
+
+  // 2. Helper function to convert number to words for the PDF
+  String _numberToWords(int number) {
+    if (number == 0) return "ZERO";
+    final units = [
+      "", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE",
+      "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN",
+      "SEVENTEEN", "EIGHTEEN", "NINETEEN"
+    ];
+    final tens = ["", "", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"];
+
+    if (number < 20) return units[number];
+    if (number < 100) return "${tens[number ~/ 10]} ${units[number % 10]}".trim();
+    if (number < 1000) return "${units[number ~/ 100]} HUNDRED ${_numberToWords(number % 100)}".trim();
+    if (number < 1000000) return "${_numberToWords(number ~/ 1000)} THOUSAND ${_numberToWords(number % 1000)}".trim();
+    return number.toString();
+  }
+
+  // 3. Helper to get fund classification text
+  String _getFundClassificationText(int? fundClass) {
+    switch (fundClass) {
+      case 1:
+        return "CLASS 1";
+      case 2:
+        return "CLASS 2";
+      case 3:
+        return "CLASS 3";
+      default:
+        return "CLASS 1";
+    }
+  }
+
+  // 4. Updated PDF Generation matching the Petty Cash Fund layout
+  Future<void> _generatePDF(Map<String, dynamic> data, {String action = 'print'}) async {
+    final pdf = pw.Document();
+
+    // Fetch user details for the "Pay to" section
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(data['userId']).get();
+    final userData = userDoc.data() ?? {};
+    final String employeeName = "${userData['lastName'] ?? ''}, ${userData['firstName'] ?? ''}".toUpperCase();
+    
+    final String dateStr = data['createdAt'] != null
+        ? DateFormat('d-MMM-yy').format((data['createdAt'] as Timestamp).toDate())
+        : 'N/A';
+    
+    final String refId = data['referenceId'] ?? "N/A";
+    final int fundClass = data['fundClassification'] ?? 1;
+    final String fundType = _getFundClassificationText(fundClass);
+
+    double amount = double.tryParse(data['amount'].toString()) ?? 0;
+    double vatAmount = (amount * 0.12) / 1.12; 
+    double netAmount = amount - vatAmount;
+    String amountInWords = "${_numberToWords(amount.round())} PESOS ONLY";
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return pw.Container(
+            padding: const pw.EdgeInsets.all(15),
+            decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.black, width: 1)),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Header with Fund Type on left and Reference ID on right
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(fundType, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                    pw.Text("Ref: $refId", style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                  ],
+                ),
+                pw.SizedBox(height: 20),
+                _pdfRow("Pay to", employeeName),
+                pw.SizedBox(height: 3),
+                _pdfRow("Purpose", data['purpose' ]?? ""),
+                 pw.SizedBox(height: 3),
+                _pdfRow("Amt in Words", amountInWords),
+                 pw.SizedBox(height: 3),
+                _pdfRow("Amount", NumberFormat('#,##0.00').format(amount)),
+                pw.SizedBox(height: 15),
+                
+                // No., Date, Amount row with text beside the labels
+                pw.Row(
+                  children: [
+                    pw.Text("No. : ", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text("N/A"),
+                    pw.SizedBox(width: 30),
+                    pw.Text("Date : ", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(dateStr),
+                    pw.SizedBox(width: 30),
+                   
+                  ],
+                ),
+                pw.SizedBox(height: 20),
+                _buildPdfTable(vatAmount, netAmount, amount),
+                pw.SizedBox(height: 30),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    _signatureBlock("PREPARED BY:", "$employeeName\nS.L.T. ASSISTANT"),
+                    _signatureBlock("CHECKED BY:", "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER"),
+                  ],
+                ),
+                pw.SizedBox(height: 30),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.end,
+                  children: [
+                    _signatureBlock("APPROVED BY:", "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER"),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    if (action == 'print') {
+      await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+    } else {
+      await Printing.sharePdf(bytes: await pdf.save(), filename: 'PettyCash_${data['referenceId']}.pdf');
+    }
+  }
+
+  pw.Widget _pdfRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Row(children: [
+        pw.SizedBox(width: 80, child: pw.Text(label, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+        pw.Text(": "),
+        pw.Text(value),
+      ]),
+    );
+  }
+
+  pw.Widget _buildPdfTable(double vat, double net, double total) {
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2),
+        1: const pw.FlexColumnWidth(4),
+        2: const pw.FlexColumnWidth(1.5),
+        3: const pw.FlexColumnWidth(1.5),
+      },
+      children: [
+        pw.TableRow(decoration: const pw.BoxDecoration(color: PdfColors.grey300), children: [
+          _tableCell("Act Code", bold: true), 
+          _tableCell("Act Name", bold: true),
+          _tableCell("Debit", bold: true, align: pw.TextAlign.right), 
+          _tableCell("Credit", bold: true, align: pw.TextAlign.right),
+        ]),
+        pw.TableRow(children: [
+          _tableCell("vat input"), 
+          _tableCell("Tp-Link Router C24"),
+          _tableCell(NumberFormat('#,##0.00').format(vat), align: pw.TextAlign.right),
+          _tableCell(""),
+        ]),
+        pw.TableRow(children: [
+          _tableCell(""), 
+          _tableCell(""),
+          _tableCell(NumberFormat('#,##0.00').format(net), align: pw.TextAlign.right),
+          _tableCell(NumberFormat('#,##0.00').format(total), align: pw.TextAlign.right),
+        ]),
+        pw.TableRow(decoration: const pw.BoxDecoration(color: PdfColors.grey200), children: [
+          _tableCell("TOTAL", bold: true), 
+          _tableCell(""),
+          _tableCell(NumberFormat('#,##0.00').format(total), bold: true, align: pw.TextAlign.right),
+          _tableCell(NumberFormat('#,##0.00').format(total), bold: true, align: pw.TextAlign.right),
+        ]),
+      ],
+    );
+  }
+
+  pw.Widget _tableCell(String text, {bool bold = false, pw.TextAlign align = pw.TextAlign.left}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(5),
+      child: pw.Text(text, textAlign: align, style: pw.TextStyle(fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
+    );
+  }
+
+  pw.Widget _signatureBlock(String title, String name) {
+    List<String> lines = name.split('\n');
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(title, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+        pw.SizedBox(height: 20),
+        pw.Container(
+          width: 200,
+          child: pw.Text("_________________________"),
+        ),
+        pw.SizedBox(height: 5),
+        for (var line in lines)
+          pw.Text(line, style: const pw.TextStyle(fontSize: 9)),
+      ],
+    );
   }
 
   void _showNotificationDialog(BuildContext context) {
@@ -66,7 +264,6 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
-                // NEW: Action buttons for Mark All as Read and Clear All
                 if (_notificationService.notifications.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
@@ -151,7 +348,6 @@ class _HomePageState extends State<HomePage> {
                             ),
                           ),
                           onTap: () {
-                            // Mark individual notification as read
                             _notificationService.markAsRead(
                               'notifications',
                               note.id,
@@ -467,8 +663,7 @@ class _HomePageState extends State<HomePage> {
         : (status == 'Rejected' ? Colors.redAccent : Colors.orange);
 
     String fundDisplay = "Class ${data['fundClassification'] ?? '1'}";
-    bool isCleared =
-        data['isCleared'] ?? false; // MODIFIED: Track isCleared field
+    bool isCleared = data['isCleared'] ?? false;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -518,7 +713,6 @@ class _HomePageState extends State<HomePage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Column(
-              // MODIFIED: Show Cleared status badge if Approved
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
@@ -593,226 +787,6 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
-    );
-  }
-
-  Future<void> _generatePDF(
-    Map<String, dynamic> data, {
-    String action = 'print',
-  }) async {
-    final pdf = pw.Document();
-
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(data['userId'])
-        .get();
-    final userData = userDoc.data() ?? {};
-
-    final String employeeName =
-        "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}";
-    final String employeeId = userData['employeeId']?.toString() ?? "N/A";
-    final String refId = data['referenceId'] ?? "N/A";
-    final String fundClassStr = "Class ${data['fundClassification'] ?? '1'}";
-
-    final String position = userData['position'] ?? '';
-    final String department = userData['department'] ?? '';
-    final String positionDeptCombined =
-        (position.isNotEmpty && department.isNotEmpty)
-        ? "$position / $department"
-        : (position.isNotEmpty
-              ? position
-              : (department.isNotEmpty ? department : "N/A"));
-
-    final String dateStr = data['createdAt'] != null
-        ? DateFormat(
-            'MM/dd/yyyy',
-          ).format((data['createdAt'] as Timestamp).toDate())
-        : 'N/A';
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context context) {
-          return pw.Container(
-            padding: const pw.EdgeInsets.all(15),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.black, width: 1),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      "CASH ADVANCE REQUEST",
-                      style: pw.TextStyle(
-                        fontSize: 14,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.Text(
-                      "REF: $refId",
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 20),
-                pw.Table(
-                  columnWidths: {
-                    0: const pw.FlexColumnWidth(3),
-                    1: const pw.FlexColumnWidth(2),
-                  },
-                  children: [
-                    pw.TableRow(
-                      children: [
-                        _pdfLabelValue("EMPLOYEE:", employeeName),
-                        _pdfLabelValue("NO:", employeeId),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        _pdfLabelValue(
-                          "POSITION / DEPT:",
-                          positionDeptCombined,
-                        ),
-                        _pdfLabelValue("DATE:", dateStr),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        _pdfLabelValue("FUND CLASSIFICATION:", fundClassStr),
-                        pw.SizedBox(),
-                      ],
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 10),
-                pw.Table(
-                  border: pw.TableBorder.all(color: PdfColors.black),
-                  columnWidths: {
-                    0: const pw.FlexColumnWidth(3),
-                    1: const pw.FlexColumnWidth(1),
-                  },
-                  children: [
-                    pw.TableRow(
-                      decoration: const pw.BoxDecoration(
-                        color: PdfColors.grey200,
-                      ),
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(5),
-                          child: pw.Text(
-                            "PURPOSE DESCRIPTION",
-                            style: pw.TextStyle(
-                              fontWeight: pw.FontWeight.bold,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(5),
-                          child: pw.Text(
-                            "AMOUNT",
-                            style: pw.TextStyle(
-                              fontWeight: pw.FontWeight.bold,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text(data['purpose'] ?? ""),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text(
-                            NumberFormat('#,##0.00').format(data['amount']),
-                            textAlign: pw.TextAlign.right,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 40),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    _pdfSignatureBlock(
-                      "Requested by:",
-                      "Name & Signature of Employee",
-                    ),
-                    _pdfSignatureBlock("Checked by:", "Department Head"),
-                  ],
-                ),
-                pw.SizedBox(height: 30),
-                _pdfSignatureBlock("Released by:", ""),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-
-    if (action == 'print') {
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdf.save(),
-      );
-    } else {
-      await Printing.sharePdf(
-        bytes: await pdf.save(),
-        filename: 'Cash_Advance_${refId}_$dateStr.pdf',
-      );
-    }
-  }
-
-  pw.Widget _pdfLabelValue(String label, String value) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 4),
-      child: pw.RichText(
-        text: pw.TextSpan(
-          children: [
-            pw.TextSpan(
-              text: "$label ",
-              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 10)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  pw.Widget _pdfSignatureBlock(String label, String subLabel) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          label,
-          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 25),
-        pw.Container(
-          width: 180,
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(
-              bottom: pw.BorderSide(color: PdfColors.black, width: 1),
-            ),
-          ),
-        ),
-        if (subLabel.isNotEmpty)
-          pw.Text(subLabel, style: const pw.TextStyle(fontSize: 8)),
-      ],
     );
   }
 
@@ -894,8 +868,9 @@ class _HomePageState extends State<HomePage> {
                   "${userData['employeeId'] ?? ''} | ${userData['department'] ?? ''}",
                 ),
                 const SizedBox(height: 15),
+                // DropdownButtonFormField
                 DropdownButtonFormField<int>(
-                  initialValue: selectedFundVal,
+                  value: selectedFundVal,
                   decoration: _inputStyle("Fund Classification"),
                   items: const [
                     DropdownMenuItem(value: 1, child: Text("Class 1")),
@@ -979,7 +954,6 @@ class _HomePageState extends State<HomePage> {
 
     final double parsedAmount = double.tryParse(amount) ?? 0;
 
-    // Fetch requester name for the admin notification
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -993,8 +967,7 @@ class _HomePageState extends State<HomePage> {
       'purpose': purpose,
       'fundClassification': fundClassification,
       'status': 'Pending',
-      'isCleared':
-          false, // MODIFIED: Added isCleared field to the initial submission data
+      'isCleared': false,
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
@@ -1004,14 +977,11 @@ class _HomePageState extends State<HomePage> {
         data['referenceId'] = _generateCleanRefId();
 
         if (existingStatus == 'Rejected') {
-          data['resubmittedFrom'] = editDocId as Object;
+          data['resubmittedFrom'] = editDocId!;
         }
 
-        // Save application to Firestore
         await FirebaseFirestore.instance.collection('advances').add(data);
 
-        // Trigger notification
-        // Note: isCleared: false is now part of the database record for this notification to reference
         await _notificationService.notifyAdminOfNewRequest(
           requesterName: fullName,
           amount: parsedAmount,
