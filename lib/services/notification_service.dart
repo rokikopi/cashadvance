@@ -46,7 +46,7 @@ class NotificationService extends ChangeNotifier {
           "$requesterName submitted a request for ₱${amount.toStringAsFixed(2)}.",
       'createdAt': FieldValue.serverTimestamp(),
       'isRead': false,
-      'isCleared': false,
+      'isCleared': false, // Added isCleared field
     });
   }
 
@@ -63,7 +63,7 @@ class NotificationService extends ChangeNotifier {
       'status': status,
       'createdAt': FieldValue.serverTimestamp(),
       'isRead': false,
-      'isCleared': false,
+      'isCleared': false, // Added isCleared field
     });
   }
 
@@ -71,7 +71,7 @@ class NotificationService extends ChangeNotifier {
     await _db.collection(collection).doc(docId).update({'isRead': true});
   }
 
-  // --- BATCH UPDATES (Restored and Corrected Names) ---
+  // --- BATCH UPDATES ---
 
   /// Marks all current user notifications as read in Firestore
   Future<void> markAllUserRead() async {
@@ -159,7 +159,18 @@ class NotificationService extends ChangeNotifier {
           _userNotifications.clear();
           for (var doc in snapshot.docs) {
             final data = doc.data();
-            final status = data['status'] ?? 'pending';
+            final status = data['status']?.toString().toLowerCase() ?? '';
+
+            // Determine color based on status
+            Color notificationColor;
+            if (status.contains('approved')) {
+              notificationColor = Colors.green;
+            } else if (status.contains('rejected')) {
+              notificationColor = Colors.red;
+            } else {
+              notificationColor = const Color(0xFF2E5BFF);
+            }
+
             _userNotifications.add(
               AppNotification(
                 id: doc.id,
@@ -170,9 +181,7 @@ class NotificationService extends ChangeNotifier {
                     DateTime.now(),
                 isRead: data['isRead'] ?? false,
                 isCleared: data['isCleared'] ?? false,
-                color: status.toString().toLowerCase() == 'approved'
-                    ? Colors.green
-                    : Colors.red,
+                color: notificationColor,
               ),
             );
           }
