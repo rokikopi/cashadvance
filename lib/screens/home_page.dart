@@ -22,11 +22,99 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final NotificationService _notificationService = NotificationService();
+  OverlayEntry? _overlayEntry;
 
   @override
   void initState() {
     super.initState();
     _notificationService.listenForUserUpdates();
+  }
+
+  // Helper to show toast at top right
+  void _showToast(String message, {bool isError = true}) {
+    // Remove existing overlay if any
+    _overlayEntry?.remove();
+
+    // Create overlay entry
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 60,
+        right: 20,
+        child: Material(
+          color: Colors.transparent,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 300),
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(20 * (1 - value), 0),
+                  child: child,
+                ),
+              );
+            },
+            child: Container(
+              width: 320,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: isError ? Colors.redAccent : Colors.green,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isError ? Icons.error_outline : Icons.check_circle_outline,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      message,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      _overlayEntry?.remove();
+                      _overlayEntry = null;
+                    },
+                    child: Icon(
+                      Icons.close,
+                      size: 16,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Add overlay to the current overlay state
+    Overlay.of(context).insert(_overlayEntry!);
+
+    // Auto remove after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      if (_overlayEntry != null) {
+        _overlayEntry?.remove();
+        _overlayEntry = null;
+      }
+    });
   }
 
   // 1. Helper to generate an 8-character clean reference ID
@@ -106,7 +194,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // 4. Updated PDF Generation with items list
+  // 4. Updated PDF Generation with Position and Department
   Future<void> _generatePDF(
     Map<String, dynamic> data, {
     String action = 'print',
@@ -122,7 +210,8 @@ class _HomePageState extends State<HomePage> {
     final String employeeName =
         "${userData['lastName'] ?? ''}, ${userData['firstName'] ?? ''}"
             .toUpperCase();
-    final String userPosition = userData['position'] ?? "S.L.T. ASSISTANT";
+    final String userPosition = userData['position'] ?? "";
+    final String userDepartment = userData['department'] ?? "";
 
     final String dateStr = data['createdAt'] != null
         ? DateFormat(
@@ -187,7 +276,12 @@ class _HomePageState extends State<HomePage> {
                 pw.SizedBox(height: 20),
                 _pdfRow("Pay to", employeeName),
                 pw.SizedBox(height: 3),
-                // Show items list
+                if (userPosition.isNotEmpty)
+                  _pdfRow("Position", userPosition),
+                if (userDepartment.isNotEmpty)
+                  _pdfRow("Department", userDepartment),
+                pw.SizedBox(height: 5),
+                // Show items list - WITHOUT AMOUNTS
                 if (items.isNotEmpty) ...[
                   _pdfRow("Items", ""),
                   pw.SizedBox(height: 5),
@@ -205,7 +299,7 @@ class _HomePageState extends State<HomePage> {
                               pw.SizedBox(width: 30, child: pw.Text("$idx.")),
                               pw.Expanded(
                                 child: pw.Text(
-                                  "${item['description']} - P${NumberFormat('#,##0.00').format(item['amount'])}",
+                                  item['description'], // Only description, no amount
                                 ),
                               ),
                             ],
@@ -248,7 +342,7 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     _signatureBlock(
                       "PREPARED BY:",
-                      "$employeeName\n$userPosition",
+                      "$employeeName\n${userPosition.isNotEmpty ? userPosition : "EMPLOYEE"}\n${userDepartment.isNotEmpty ? userDepartment : ""}",
                     ),
                     _signatureBlock(
                       "CHECKED BY:",
@@ -442,7 +536,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showTransactionDetails(Map<String, dynamic> data) {
-    // Fetch user details for the "Pay to" section
     final String refId = data['referenceId'] ?? "N/A";
     final String status = data['status'] ?? 'Pending';
     final String fundDisplay = "Class ${data['fundClassification'] ?? '1'}";
@@ -455,6 +548,7 @@ class _HomePageState extends State<HomePage> {
 
     List<dynamic> items = data['items'] ?? [];
     bool isCleared = data['isCleared'] ?? false;
+    String? reason = data['reason'];
 
     Color statusColor = status == 'Approved'
         ? Colors.green
@@ -586,6 +680,52 @@ class _HomePageState extends State<HomePage> {
                             ],
                           ),
                         ),
+
+                        // Reason/Remarks Section
+                        if (reason != null && reason.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey[200]!),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.note_outlined,
+                                      size: 18,
+                                      color: AppColors.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      "Reason",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textMain,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  reason,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: Colors.grey[700],
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
                         const SizedBox(height: 20),
 
                         // Items Section
@@ -714,6 +854,46 @@ class _HomePageState extends State<HomePage> {
                         ),
 
                         const SizedBox(height: 30),
+
+                        // Edit Button (if pending or rejected)
+                        if (status == 'Pending' || status == 'Rejected')
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(context); // Close the details modal
+                                  // Open the edit popup
+                                  _showApplyPopup(
+                                    context,
+                                    data['userId'],
+                                    editDocId: data['referenceId'] != null ? null : null,
+                                    existingData: data,
+                                  );
+                                },
+                                icon: Icon(
+                                  status == 'Rejected' ? Icons.refresh : Icons.edit_outlined,
+                                  size: 18,
+                                  color: AppColors.primary,
+                                ),
+                                label: Text(
+                                  status == 'Rejected' ? "Resubmit Application" : "Edit Request",
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -1428,6 +1608,14 @@ class _HomePageState extends State<HomePage> {
     }
 
     int selectedFundVal = existingData?['fundClassification'] ?? 1;
+    
+    // Add controller for reasons/remarks
+    final TextEditingController reasonController = TextEditingController(
+      text: existingData?['reason'] ?? '',
+    );
+
+    // Track items validation warning
+    bool localShowItemsWarning = false;
 
     if (!context.mounted) return;
 
@@ -1437,6 +1625,8 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
+          bool localShowReasonWarning = false; // Local warning state for reason
+          
           // Helper to add new item
           void addItem() {
             setModalState(() {
@@ -1542,13 +1732,33 @@ class _HomePageState extends State<HomePage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        "Items/Particulars",
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textMain,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            "Items/Particulars",
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textMain,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "*",
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                            ),
+                          ),
+                          Text(
+                            " (Required)",
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
                       ),
                       TextButton.icon(
                         onPressed: addItem,
@@ -1561,72 +1771,320 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Dynamic Items List
-                  ...items.asMap().entries.map((entry) {
-                    int index = entry.key;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[200]!),
+                  // Dynamic Items List with Warning
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: localShowItemsWarning
+                            ? Colors.red
+                            : Colors.grey[200]!,
+                        width: localShowItemsWarning ? 2 : 1,
                       ),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  "Item ${index + 1}",
-                                  style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ),
-                              if (items.length > 1)
-                                IconButton(
-                                  onPressed: () => removeItem(index),
-                                  icon: const Icon(
-                                    Icons.delete_outline,
-                                    size: 20,
-                                  ),
-                                  color: Colors.red,
-                                  tooltip: "Remove item",
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: descriptionControllers[index],
-                            decoration: _inputStyle("Item Description"),
-                            maxLines: 2,
-                            onChanged: (_) {
-                              // Trigger rebuild to update total
-                              setModalState(() {
-                                updateItemsFromControllers();
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: amountControllers[index],
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ...items.asMap().entries.map((entry) {
+                          int index = entry.key;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey[200]!),
                             ),
-                            decoration: _inputStyle("Amount (₱)"),
-                            onChanged: (_) {
-                              // Trigger rebuild to update total
-                              setModalState(() {
-                                updateItemsFromControllers();
-                              });
-                            },
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        "Item ${index + 1}",
+                                        style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                    if (items.length > 1)
+                                      IconButton(
+                                        onPressed: () => removeItem(index),
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          size: 20,
+                                        ),
+                                        color: Colors.red,
+                                        tooltip: "Remove item",
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: descriptionControllers[index],
+                                  decoration: InputDecoration(
+                                    labelText: "Item Description",
+                                    labelStyle: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: localShowItemsWarning && descriptionControllers[index].text.trim().isEmpty
+                                          ? Colors.red
+                                          : Colors.grey[600],
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey[100],
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(color: AppColors.primary),
+                                    ),
+                                  ),
+                                  maxLines: 2,
+                                  onChanged: (_) {
+                                    setModalState(() {
+                                      updateItemsFromControllers();
+                                      if (descriptionControllers[index].text.trim().isNotEmpty && 
+                                          (amountControllers[index].text.trim().isNotEmpty && double.tryParse(amountControllers[index].text) != null && double.tryParse(amountControllers[index].text)! > 0)) {
+                                        localShowItemsWarning = false;
+                                      }
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: amountControllers[index],
+                                  keyboardType: const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: "Amount (₱)",
+                                    labelStyle: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      color: localShowItemsWarning && (amountControllers[index].text.trim().isEmpty || double.tryParse(amountControllers[index].text) == 0)
+                                          ? Colors.red
+                                          : Colors.grey[600],
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey[100],
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(color: AppColors.primary),
+                                    ),
+                                    prefixText: "₱ ",
+                                    prefixStyle: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  onChanged: (_) {
+                                    setModalState(() {
+                                      updateItemsFromControllers();
+                                      if (descriptionControllers[index].text.trim().isNotEmpty && 
+                                          amountControllers[index].text.trim().isNotEmpty &&
+                                          double.tryParse(amountControllers[index].text) != null &&
+                                          double.tryParse(amountControllers[index].text)! > 0) {
+                                        localShowItemsWarning = false;
+                                      }
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                        // Items Error Message
+                        if (localShowItemsWarning)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0, left: 4.0, right: 4.0),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    size: 18,
+                                    color: Colors.red.shade700,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      "Please add at least one item with description and amount greater than 0.",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: Colors.red.shade700,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ],
+                      ],
+                    ),
+                  ),
+                  
+                  // Reasons/Remarks Field with Error Message INSIDE the red box
+                  const SizedBox(height: 12),
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: localShowReasonWarning && reasonController.text.trim().isEmpty
+                            ? Colors.red
+                            : Colors.grey[200]!,
+                        width: localShowReasonWarning && reasonController.text.trim().isEmpty ? 2 : 1,
                       ),
-                    );
-                  }),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.note_add_outlined,
+                              size: 18,
+                              color: localShowReasonWarning && reasonController.text.trim().isEmpty
+                                  ? Colors.red
+                                  : AppColors.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Reason / Purpose",
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: localShowReasonWarning && reasonController.text.trim().isEmpty
+                                    ? Colors.red
+                                    : AppColors.textMain,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "*",
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red,
+                              ),
+                            ),
+                            Text(
+                              " (Required)",
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: reasonController,
+                          decoration: InputDecoration(
+                            hintText: "Please provide a reason for this request (e.g., Urgent office supplies, Team building expenses, etc.)",
+                            hintStyle: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: Colors.grey[400],
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: localShowReasonWarning && reasonController.text.trim().isEmpty
+                                    ? Colors.red
+                                    : Colors.grey[300]!,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: localShowReasonWarning && reasonController.text.trim().isEmpty
+                                    ? Colors.red
+                                    : Colors.grey[300]!,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                          ),
+                          maxLines: 3,
+                          maxLength: 500,
+                          onChanged: (_) {
+                            setModalState(() {
+                              if (reasonController.text.trim().isNotEmpty) {
+                                localShowReasonWarning = false;
+                              }
+                            });
+                          },
+                          buildCounter: (context, {required currentLength, required isFocused, maxLength}) {
+                            return Text(
+                              "$currentLength/$maxLength",
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                color: Colors.grey[500],
+                              ),
+                            );
+                          },
+                        ),
+                        // Error Message INSIDE the red box below the field
+                        if (localShowReasonWarning && reasonController.text.trim().isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12.0, left: 4.0, right: 4.0),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    size: 18,
+                                    color: Colors.red.shade700,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      "Please provide a reason for this request. This field is required.",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: Colors.red.shade700,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  
                   // Total Amount Display
                   Container(
                     margin: const EdgeInsets.only(top: 12, bottom: 20),
@@ -1681,14 +2139,19 @@ class _HomePageState extends State<HomePage> {
                         );
 
                         if (!hasValidItem) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                "Please add at least one item with description and amount",
-                              ),
-                              backgroundColor: Colors.redAccent,
-                            ),
-                          );
+                          setModalState(() {
+                            localShowItemsWarning = true;
+                          });
+                          _showToast("Please add at least one item with description and amount greater than 0");
+                          return;
+                        }
+
+                        // Validate reason is provided
+                        if (reasonController.text.trim().isEmpty) {
+                          setModalState(() {
+                            localShowReasonWarning = true;
+                          });
+                          _showToast("Please provide a reason for this request");
                           return;
                         }
 
@@ -1698,6 +2161,7 @@ class _HomePageState extends State<HomePage> {
                           totalAmount,
                           items,
                           selectedFundVal,
+                          reason: reasonController.text.trim(),
                           editDocId: editDocId,
                           existingStatus: existingData?['status'],
                           existingRefId: existingData?['referenceId'],
@@ -1732,17 +2196,13 @@ class _HomePageState extends State<HomePage> {
     double totalAmount,
     List<Map<String, dynamic>> items,
     int fundClassification, {
+    String? reason,
     String? editDocId,
     String? existingStatus,
     String? existingRefId,
   }) async {
     if (totalAmount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please add at least one valid item with amount"),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      _showToast("Please add at least one valid item with amount");
       return;
     }
 
@@ -1760,7 +2220,7 @@ class _HomePageState extends State<HomePage> {
       'fundClassification': fundClassification,
       'status': 'Pending',
       'updatedAt': FieldValue.serverTimestamp(),
-      // 'isCleared' removed - not needed for transactions
+      if (reason != null && reason.isNotEmpty) 'reason': reason,
     };
 
     try {
@@ -1778,26 +2238,28 @@ class _HomePageState extends State<HomePage> {
           requesterName: fullName,
           amount: totalAmount,
         );
+        
+        // Close the popup and show success message
+        if (context.mounted) {
+          Navigator.pop(context);
+          _showToast("Request submitted successfully!", isError: false);
+        }
       } else {
         data['referenceId'] = existingRefId ?? _generateCleanRefId();
         await FirebaseFirestore.instance
             .collection('advances')
             .doc(editDocId)
             .update(data);
+        
+        if (context.mounted) {
+          Navigator.pop(context);
+          _showToast("Request updated successfully!", isError: false);
+        }
       }
     } catch (e) {
       debugPrint("Error submitting: $e");
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Error: $e"),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+      _showToast("Error: $e");
     }
-
-    if (context.mounted) Navigator.pop(context);
   }
 
   Widget _buildEmptyState() {
