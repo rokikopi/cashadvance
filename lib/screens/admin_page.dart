@@ -172,7 +172,7 @@ class _AdminPageState extends State<AdminPage> {
                 pw.SizedBox(height: 20),
                 _pdfRow("Pay to", employeeName),
                 pw.SizedBox(height: 3),
-                // Show items list
+                // Show items list - WITHOUT AMOUNTS
                 if (items.isNotEmpty) ...[
                   _pdfRow("Items", ""),
                   pw.SizedBox(height: 5),
@@ -190,7 +190,7 @@ class _AdminPageState extends State<AdminPage> {
                               pw.SizedBox(width: 30, child: pw.Text("$idx.")),
                               pw.Expanded(
                                 child: pw.Text(
-                                  "${item['description']} - P${NumberFormat('#,##0.00').format(item['amount'])}",
+                                  item['description'], // Only description, no amount
                                 ),
                               ),
                             ],
@@ -439,6 +439,7 @@ class _AdminPageState extends State<AdminPage> {
         : 'N/A';
 
     List<dynamic> items = data['items'] ?? [];
+    String? reason = data['reason'];
 
     Color statusColor = status == 'Approved'
         ? Colors.green
@@ -560,6 +561,52 @@ class _AdminPageState extends State<AdminPage> {
                             ],
                           ),
                         ),
+
+                        // Reason/Remarks Section
+                        if (reason != null && reason.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey[200]!),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.note_outlined,
+                                      size: 18,
+                                      color: AppColors.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      "Reason / Remarks",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textMain,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  reason,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: Colors.grey[700],
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
                         const SizedBox(height: 20),
 
                         // Items Section
@@ -1209,6 +1256,25 @@ class _AdminPageState extends State<AdminPage> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
+                  // Show reason if exists
+                  if (data['reason'] != null && data['reason'].toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Row(
+                        children: [
+                          Icon(Icons.note_outlined, size: 12, color: Colors.grey[500]),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              data['reason'],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
