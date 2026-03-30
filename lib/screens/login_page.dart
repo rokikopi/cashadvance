@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cashadvance/theme/constants.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 class LoginPage extends StatefulWidget {
@@ -14,7 +15,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final AuthService _authService = AuthService();
-  final _emailController = TextEditingController();
+  final _employeeIdController = TextEditingController();
   final _pwController = TextEditingController();
 
   bool _isPasswordVisible = false;
@@ -51,24 +52,54 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _employeeIdController.dispose();
     _pwController.dispose();
     super.dispose();
   }
 
+  Future<String?> _getEmailFromEmployeeId(String employeeId) async {
+    try {
+      // Query Firestore to find user by employeeId
+      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('employeeId', isEqualTo: employeeId)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final userData = snapshot.docs.first.data() as Map<String, dynamic>;
+        return userData['email'] as String?;
+      }
+      return null;
+    } catch (e) {
+      debugPrint("Error finding user by employee ID: $e");
+      return null;
+    }
+  }
+
   Future<void> _handleEmailLogin() async {
-    if (_emailController.text.trim().isEmpty ||
-        _pwController.text.trim().isEmpty) {
-      _showError("Please enter your email and password.");
+    final employeeId = _employeeIdController.text.trim();
+    final password = _pwController.text.trim();
+
+    if (employeeId.isEmpty || password.isEmpty) {
+      _showError("Please enter your Employee ID and password.");
       return;
     }
 
     setState(() => _isLoading = true);
+
     try {
-      await _authService.signInWithEmail(
-        _emailController.text.trim(),
-        _pwController.text.trim(),
-      );
+      // First, find the email associated with this employee ID
+      final email = await _getEmailFromEmployeeId(employeeId);
+
+      if (email == null) {
+        _showError("Employee ID not found. Please check and try again.");
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Then sign in with email and password
+      await _authService.signInWithEmail(email, password);
 
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/');
@@ -122,16 +153,30 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleForgotPassword() async {
-    if (_emailController.text.trim().isEmpty) {
-      _showError("Enter your email address above to reset your password.");
+    final employeeId = _employeeIdController.text.trim();
+
+    if (employeeId.isEmpty) {
+      _showError("Enter your Employee ID above to reset your password.");
       return;
     }
+
     setState(() => _isLoading = true);
+
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailController.text.trim(),
+      // First, find the email associated with this employee ID
+      final email = await _getEmailFromEmployeeId(employeeId);
+
+      if (email == null) {
+        _showError("Employee ID not found. Please check and try again.");
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Then send password reset email
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      _showSuccess(
+        "Password reset email sent to the email associated with this Employee ID. Check your inbox.",
       );
-      _showSuccess("Password reset email sent. Check your inbox.");
     } on FirebaseAuthException catch (e) {
       _showError(_friendlyAuthError(e.code));
     } finally {
@@ -143,7 +188,7 @@ class _LoginPageState extends State<LoginPage> {
     switch (code) {
       case 'user-not-found':
       case 'invalid-credential':
-        return "Incorrect email or password.";
+        return "Incorrect employee ID or password.";
       case 'wrong-password':
         return "Incorrect password. Please try again.";
       case 'invalid-email':
@@ -238,10 +283,10 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 40),
                       _buildTextField(
-                        label: "Email",
-                        icon: Icons.email_outlined,
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
+                        label: "Employee ID",
+                        icon: Icons.badge_outlined,
+                        controller: _employeeIdController,
+                        keyboardType: TextInputType.text,
                       ),
                       _buildTextField(
                         label: "Password",

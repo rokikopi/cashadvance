@@ -1948,10 +1948,8 @@ class _HomePageState extends State<HomePage> {
                       color: Colors.grey[50],
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: localShowReasonWarning && reasonController.text.trim().isEmpty
-                            ? Colors.red
-                            : Colors.grey[200]!,
-                        width: localShowReasonWarning && reasonController.text.trim().isEmpty ? 2 : 1,
+                        color: Colors.grey[200]!,
+                        width: 1,
                       ),
                     ),
                     child: Column(
@@ -1962,9 +1960,7 @@ class _HomePageState extends State<HomePage> {
                             Icon(
                               Icons.note_add_outlined,
                               size: 18,
-                              color: localShowReasonWarning && reasonController.text.trim().isEmpty
-                                  ? Colors.red
-                                  : AppColors.primary,
+                              color: AppColors.primary,
                             ),
                             const SizedBox(width: 8),
                             Text(
@@ -1972,9 +1968,7 @@ class _HomePageState extends State<HomePage> {
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
-                                color: localShowReasonWarning && reasonController.text.trim().isEmpty
-                                    ? Colors.red
-                                    : AppColors.textMain,
+                                color: AppColors.textMain,
                               ),
                             ),
                             const SizedBox(width: 4),
@@ -2007,17 +2001,13 @@ class _HomePageState extends State<HomePage> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide(
-                                color: localShowReasonWarning && reasonController.text.trim().isEmpty
-                                    ? Colors.red
-                                    : Colors.grey[300]!,
+                                color: Colors.grey[300]!,
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide(
-                                color: localShowReasonWarning && reasonController.text.trim().isEmpty
-                                    ? Colors.red
-                                    : Colors.grey[300]!,
+                                color: Colors.grey[300]!,
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
