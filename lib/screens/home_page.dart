@@ -30,7 +30,6 @@ class _HomePageState extends State<HomePage> {
     _notificationService.listenForUserUpdates();
   }
 
-  // Helper to show toast at top right
   void _showToast(String message, {bool isError = true}) {
     _overlayEntry?.remove();
 
@@ -125,13 +124,38 @@ class _HomePageState extends State<HomePage> {
   String _numberToWords(int number) {
     if (number == 0) return "ZERO";
     final units = [
-      "", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT",
-      "NINE", "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN",
-      "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN",
+      "",
+      "ONE",
+      "TWO",
+      "THREE",
+      "FOUR",
+      "FIVE",
+      "SIX",
+      "SEVEN",
+      "EIGHT",
+      "NINE",
+      "TEN",
+      "ELEVEN",
+      "TWELVE",
+      "THIRTEEN",
+      "FOURTEEN",
+      "FIFTEEN",
+      "SIXTEEN",
+      "SEVENTEEN",
+      "EIGHTEEN",
+      "NINETEEN",
     ];
     final tens = [
-      "", "", "TWENTY", "THIRTY", "FORTY", "FIFTY",
-      "SIXTY", "SEVENTY", "EIGHTY", "NINETY",
+      "",
+      "",
+      "TWENTY",
+      "THIRTY",
+      "FORTY",
+      "FIFTY",
+      "SIXTY",
+      "SEVENTY",
+      "EIGHTY",
+      "NINETY",
     ];
 
     if (number < 20) return units[number];
@@ -139,19 +163,18 @@ class _HomePageState extends State<HomePage> {
       return "${tens[number ~/ 10]} ${units[number % 10]}".trim();
     }
     if (number < 1000) {
-      return "${units[number ~/ 100]} HUNDRED ${_numberToWords(number % 100)}".trim();
+      return "${units[number ~/ 100]} HUNDRED ${_numberToWords(number % 100)}"
+          .trim();
     }
     if (number < 1000000) {
-      return "${_numberToWords(number ~/ 1000)} THOUSAND ${_numberToWords(number % 1000)}".trim();
+      return "${_numberToWords(number ~/ 1000)} THOUSAND ${_numberToWords(number % 1000)}"
+          .trim();
     }
     return number.toString();
   }
 
-  String _getFundClassificationText() {
-    return "H.O REVOLVING FUNDS";
-  }
-
-  Future<void> _generatePDF(
+  // New PDF: Request Form
+  Future<void> _generateRequestPDF(
     Map<String, dynamic> data, {
     String action = 'print',
   }) async {
@@ -163,16 +186,388 @@ class _HomePageState extends State<HomePage> {
         .get();
     final userData = userDoc.data() ?? {};
     final String employeeName =
-        "${userData['lastName'] ?? ''}, ${userData['firstName'] ?? ''}".toUpperCase();
+        "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}"
+            .toUpperCase();
+    final String userPosition = userData['position'] ?? "";
+    final String userDepartment = userData['department'] ?? "";
+    final String positionDept =
+        "$userPosition${userPosition.isNotEmpty && userDepartment.isNotEmpty ? " / " : ""}$userDepartment";
+
+    final String dateStr = data['createdAt'] != null
+        ? DateFormat(
+            'MMMM dd, yyyy',
+          ).format((data['createdAt'] as Timestamp).toDate())
+        : DateFormat('MMMM dd, yyyy').format(DateTime.now());
+
+    final String refId = data['referenceId'] ?? "N/A";
+    final String fundSource = data['fundSource'] ?? "H.O Revolving Funds";
+    final String otherFundSource = data['otherFundSource'] ?? "";
+    final String displayFundSource = fundSource == "Other"
+        ? otherFundSource
+        : fundSource;
+
+    List<dynamic> items = data['items'] ?? [];
+    double totalAmount = double.tryParse(data['amount'].toString()) ?? 0;
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Title with teal background
+              pw.Container(
+                padding: const pw.EdgeInsets.all(12),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.teal700,
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Center(
+                  child: pw.Text(
+                    "CASH ADVANCE REQUEST",
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                    ),
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 20),
+
+              // Row 2: Employee and No
+              pw.Row(
+                children: [
+                  pw.Expanded(
+                    child: pw.Container(
+                      padding: const pw.EdgeInsets.all(8),
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border.all(color: PdfColors.grey),
+                      ),
+                      child: pw.Row(
+                        children: [
+                          pw.SizedBox(
+                            width: 80,
+                            child: pw.Text(
+                              "EMPLOYEE:",
+                              style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          pw.Text(
+                            employeeName.isEmpty
+                                ? "_______________"
+                                : employeeName,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(width: 10),
+                  pw.Expanded(
+                    child: pw.Container(
+                      padding: const pw.EdgeInsets.all(8),
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border.all(color: PdfColors.grey),
+                      ),
+                      child: pw.Row(
+                        children: [
+                          pw.SizedBox(
+                            width: 50,
+                            child: pw.Text(
+                              "NO:",
+                              style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          pw.Text(refId),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 10),
+
+              // Row 3: Position/Dept and Date
+              pw.Row(
+                children: [
+                  pw.Expanded(
+                    child: pw.Container(
+                      padding: const pw.EdgeInsets.all(8),
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border.all(color: PdfColors.grey),
+                      ),
+                      child: pw.Row(
+                        children: [
+                          pw.SizedBox(
+                            width: 120,
+                            child: pw.Text(
+                              "POSITION/DEPT:",
+                              style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          pw.Text(
+                            positionDept.isEmpty
+                                ? "_______________"
+                                : positionDept,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(width: 10),
+                  pw.Expanded(
+                    child: pw.Container(
+                      padding: const pw.EdgeInsets.all(8),
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border.all(color: PdfColors.grey),
+                      ),
+                      child: pw.Row(
+                        children: [
+                          pw.SizedBox(
+                            width: 60,
+                            child: pw.Text(
+                              "DATE:",
+                              style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          pw.Text(dateStr),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 20),
+
+              // Fund Source row
+              pw.Container(
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey),
+                ),
+                child: pw.Row(
+                  children: [
+                    pw.SizedBox(
+                      width: 100,
+                      child: pw.Text(
+                        "FUND SOURCE:",
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      ),
+                    ),
+                    pw.Text(displayFundSource),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 20),
+
+              // Title row for items
+              pw.Container(
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.teal700,
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Row(
+                  children: [
+                    pw.Expanded(
+                      flex: 3,
+                      child: pw.Text(
+                        "PURPOSE DESCRIPTION",
+                        style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                        ),
+                      ),
+                    ),
+                    pw.Expanded(
+                      flex: 1,
+                      child: pw.Text(
+                        "AMOUNT",
+                        style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                        ),
+                        textAlign: pw.TextAlign.right,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Items rows
+              for (var item in items)
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(8),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border(
+                      left: pw.BorderSide(color: PdfColors.grey),
+                      right: pw.BorderSide(color: PdfColors.grey),
+                      bottom: pw.BorderSide(color: PdfColors.grey),
+                    ),
+                  ),
+                  child: pw.Row(
+                    children: [
+                      pw.Expanded(
+                        flex: 3,
+                        child: pw.Text(item['description'] ?? ''),
+                      ),
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Text(
+                          "P${NumberFormat('#,##0.00').format(item['amount'] ?? 0)}",
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Total row
+              pw.Container(
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey),
+                ),
+                child: pw.Row(
+                  children: [
+                    pw.Expanded(
+                      flex: 3,
+                      child: pw.Text(
+                        "TOTAL:",
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      ),
+                    ),
+                    pw.Expanded(
+                      flex: 1,
+                      child: pw.Text(
+                        "P${NumberFormat('#,##0.00').format(totalAmount)}",
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        textAlign: pw.TextAlign.right,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 30),
+
+              // Signatures
+              pw.Row(
+                children: [
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          "REQUESTED BY:",
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
+                        pw.SizedBox(height: 40),
+                        pw.Container(
+                          width: 180,
+                          child: pw.Text("_________________________"),
+                        ),
+                        pw.SizedBox(height: 5),
+                        pw.Text(
+                          "Name & Signature of Employee",
+                          style: pw.TextStyle(fontSize: 9),
+                        ),
+                      ],
+                    ),
+                  ),
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          "CHECKED BY:",
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
+                        pw.SizedBox(height: 40),
+                        pw.Container(
+                          width: 180,
+                          child: pw.Text("_________________________"),
+                        ),
+                        pw.SizedBox(height: 5),
+                        pw.Text(
+                          "Department Head",
+                          style: pw.TextStyle(fontSize: 9),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 30),
+
+              // Released By
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    "RELEASED BY:",
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 40),
+                  pw.Container(
+                    width: 200,
+                    child: pw.Text("_________________________"),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (action == 'print') {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
+    } else {
+      await Printing.sharePdf(
+        bytes: await pdf.save(),
+        filename: 'RequestForm_${data['referenceId']}.pdf',
+      );
+    }
+  }
+
+  // Liquidation Form PDF (existing)
+  Future<void> _generateLiquidationPDF(
+    Map<String, dynamic> data, {
+    String action = 'print',
+  }) async {
+    final pdf = pw.Document();
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(data['userId'])
+        .get();
+    final userData = userDoc.data() ?? {};
+    final String employeeName =
+        "${userData['lastName'] ?? ''}, ${userData['firstName'] ?? ''}"
+            .toUpperCase();
     final String userPosition = userData['position'] ?? "";
     final String userDepartment = userData['department'] ?? "";
 
     final String dateStr = data['createdAt'] != null
-        ? DateFormat('d-MMM-yy').format((data['createdAt'] as Timestamp).toDate())
+        ? DateFormat(
+            'd-MMM-yy',
+          ).format((data['createdAt'] as Timestamp).toDate())
         : 'N/A';
 
     final String refId = data['referenceId'] ?? "N/A";
-    final String fundType = _getFundClassificationText();
+    final String fundType = "H.O REVOLVING FUNDS";
 
     double amount = double.tryParse(data['amount'].toString()) ?? 0;
     double totalVatAmount = 0;
@@ -193,7 +588,6 @@ class _HomePageState extends State<HomePage> {
       });
     }
 
-    double netAmount = amount - totalVatAmount;
     String amountInWords = "${_numberToWords(amount.round())} PESOS ONLY";
 
     pdf.addPage(
@@ -214,7 +608,10 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     pw.Text(
                       fundType,
-                      style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
                     ),
                     pw.SizedBox(),
                   ],
@@ -223,7 +620,8 @@ class _HomePageState extends State<HomePage> {
                 _pdfRow("Pay to", employeeName),
                 pw.SizedBox(height: 3),
                 if (userPosition.isNotEmpty) _pdfRow("Position", userPosition),
-                if (userDepartment.isNotEmpty) _pdfRow("Department", userDepartment),
+                if (userDepartment.isNotEmpty)
+                  _pdfRow("Department", userDepartment),
                 pw.SizedBox(height: 5),
                 if (items.isNotEmpty) ...[
                   _pdfRow("Items", ""),
@@ -251,19 +649,28 @@ class _HomePageState extends State<HomePage> {
                 pw.SizedBox(height: 3),
                 _pdfRow("Amt in Words", amountInWords),
                 pw.SizedBox(height: 3),
-                _pdfRow("Total Amount", "P${NumberFormat('#,##0.00').format(amount)}"),
+                _pdfRow(
+                  "Total Amount",
+                  "P${NumberFormat('#,##0.00').format(amount)}",
+                ),
                 pw.SizedBox(height: 15),
                 pw.Row(
                   children: [
-                    pw.Text("No. : ", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                      "No. : ",
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
                     pw.Text(refId),
                     pw.SizedBox(width: 30),
-                    pw.Text("Date : ", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                      "Date : ",
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
                     pw.Text(dateStr),
                   ],
                 ),
                 pw.SizedBox(height: 20),
-                _buildPdfTable(itemsWithVat, totalVatAmount, netAmount, amount),
+                _buildLiquidationTable(itemsWithVat, totalVatAmount, amount),
                 pw.SizedBox(height: 30),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -272,14 +679,20 @@ class _HomePageState extends State<HomePage> {
                       "PREPARED BY:",
                       "$employeeName\n${userPosition.isNotEmpty ? userPosition : "EMPLOYEE"}\n${userDepartment.isNotEmpty ? userDepartment : ""}",
                     ),
-                    _signatureBlock("CHECKED BY:", "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER"),
+                    _signatureBlock(
+                      "CHECKED BY:",
+                      "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
+                    ),
                   ],
                 ),
                 pw.SizedBox(height: 30),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.end,
                   children: [
-                    _signatureBlock("APPROVED BY:", "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER"),
+                    _signatureBlock(
+                      "APPROVED BY:",
+                      "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
+                    ),
                   ],
                 ),
               ],
@@ -290,11 +703,13 @@ class _HomePageState extends State<HomePage> {
     );
 
     if (action == 'print') {
-      await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
     } else {
       await Printing.sharePdf(
         bytes: await pdf.save(),
-        filename: 'PettyCash_${data['referenceId']}.pdf',
+        filename: 'LiquidationForm_${data['referenceId']}.pdf',
       );
     }
   }
@@ -304,7 +719,13 @@ class _HomePageState extends State<HomePage> {
       padding: const pw.EdgeInsets.symmetric(vertical: 2),
       child: pw.Row(
         children: [
-          pw.SizedBox(width: 80, child: pw.Text(label, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+          pw.SizedBox(
+            width: 80,
+            child: pw.Text(
+              label,
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
+          ),
           pw.Text(": "),
           pw.Text(value),
         ],
@@ -312,10 +733,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  pw.Widget _buildPdfTable(
+  pw.Widget _buildLiquidationTable(
     List<Map<String, dynamic>> itemsWithVat,
     double totalVatAmount,
-    double netAmount,
     double totalAmount,
   ) {
     List<pw.TableRow> rows = [];
@@ -337,7 +757,10 @@ class _HomePageState extends State<HomePage> {
         children: [
           _tableCell("vat input"),
           _tableCell(""),
-          _tableCell("P${NumberFormat('#,##0.00').format(totalVatAmount)}", align: pw.TextAlign.right),
+          _tableCell(
+            "P${NumberFormat('#,##0.00').format(totalVatAmount)}",
+            align: pw.TextAlign.right,
+          ),
           _tableCell(""),
         ],
       ),
@@ -349,7 +772,10 @@ class _HomePageState extends State<HomePage> {
           children: [
             _tableCell(""),
             _tableCell(item['description']),
-            _tableCell("P${NumberFormat('#,##0.00').format(item['netAmount'])}", align: pw.TextAlign.right),
+            _tableCell(
+              "P${NumberFormat('#,##0.00').format(item['netAmount'])}",
+              align: pw.TextAlign.right,
+            ),
             _tableCell(""),
           ],
         ),
@@ -362,7 +788,10 @@ class _HomePageState extends State<HomePage> {
           _tableCell(""),
           _tableCell(""),
           _tableCell(""),
-          _tableCell("P${NumberFormat('#,##0.00').format(totalAmount)}", align: pw.TextAlign.right),
+          _tableCell(
+            "P${NumberFormat('#,##0.00').format(totalAmount)}",
+            align: pw.TextAlign.right,
+          ),
         ],
       ),
     );
@@ -373,8 +802,16 @@ class _HomePageState extends State<HomePage> {
         children: [
           _tableCell("TOTAL", bold: true),
           _tableCell(""),
-          _tableCell("P${NumberFormat('#,##0.00').format(totalAmount)}", bold: true, align: pw.TextAlign.right),
-          _tableCell("P${NumberFormat('#,##0.00').format(totalAmount)}", bold: true, align: pw.TextAlign.right),
+          _tableCell(
+            "P${NumberFormat('#,##0.00').format(totalAmount)}",
+            bold: true,
+            align: pw.TextAlign.right,
+          ),
+          _tableCell(
+            "P${NumberFormat('#,##0.00').format(totalAmount)}",
+            bold: true,
+            align: pw.TextAlign.right,
+          ),
         ],
       ),
     );
@@ -391,7 +828,11 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  pw.Widget _tableCell(String text, {bool bold = false, pw.TextAlign align = pw.TextAlign.left}) {
+  pw.Widget _tableCell(
+    String text, {
+    bool bold = false,
+    pw.TextAlign align = pw.TextAlign.left,
+  }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(5),
       child: pw.Text(
@@ -410,11 +851,15 @@ class _HomePageState extends State<HomePage> {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text(title, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+        pw.Text(
+          title,
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+        ),
         pw.SizedBox(height: 20),
         pw.Container(width: 200, child: pw.Text("_________________________")),
         pw.SizedBox(height: 5),
-        for (var line in lines) pw.Text(line, style: const pw.TextStyle(fontSize: 9)),
+        for (var line in lines)
+          pw.Text(line, style: const pw.TextStyle(fontSize: 9)),
       ],
     );
   }
@@ -422,14 +867,17 @@ class _HomePageState extends State<HomePage> {
   void _showTransactionDetails(Map<String, dynamic> data) {
     final String refId = data['referenceId'] ?? "N/A";
     final String status = data['status'] ?? 'Pending';
-    final String fundDisplay = "H.O Revolving Funds";
+    final String fundDisplay = data['fundSource'] == "Other"
+        ? (data['otherFundSource'] ?? "H.O Revolving Funds")
+        : (data['fundSource'] ?? "H.O Revolving Funds");
     final double amount = double.tryParse(data['amount'].toString()) ?? 0;
     final String dateStr = data['createdAt'] != null
-        ? DateFormat('MM/dd/yyyy hh:mm a').format((data['createdAt'] as Timestamp).toDate())
+        ? DateFormat(
+            'MM/dd/yyyy hh:mm a',
+          ).format((data['createdAt'] as Timestamp).toDate())
         : 'N/A';
 
     List<dynamic> items = data['items'] ?? [];
-    bool isCleared = data['isCleared'] ?? false;
     String? reason = data['reason'];
 
     Color statusColor = status == 'Approved'
@@ -441,7 +889,9 @@ class _HomePageState extends State<HomePage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
@@ -487,20 +937,30 @@ class _HomePageState extends State<HomePage> {
                                 const SizedBox(height: 4),
                                 Text(
                                   "Reference: $refId",
-                                  style: GoogleFonts.robotoMono(fontSize: 12, color: Colors.grey[600]),
+                                  style: GoogleFonts.robotoMono(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: statusColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               status,
-                              style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ],
@@ -528,15 +988,11 @@ class _HomePageState extends State<HomePage> {
                               const Divider(height: 12),
                               _detailRow("Fund Source", fundDisplay),
                               const Divider(height: 12),
-                              _detailRow("Total Amount", "P${NumberFormat('#,##0.00').format(amount)}", isBold: true),
-                              if (status == 'Approved') ...[
-                                const Divider(height: 12),
-                                _detailRow(
-                                  "Clearance Status",
-                                  isCleared ? "CLEARED" : "UNCLEARED",
-                                  valueColor: isCleared ? Colors.green : Colors.grey,
-                                ),
-                              ],
+                              _detailRow(
+                                "Total Amount",
+                                "P${NumberFormat('#,##0.00').format(amount)}",
+                                isBold: true,
+                              ),
                             ],
                           ),
                         ),
@@ -554,18 +1010,30 @@ class _HomePageState extends State<HomePage> {
                               children: [
                                 Row(
                                   children: [
-                                    Icon(Icons.note_outlined, size: 18, color: AppColors.primary),
+                                    Icon(
+                                      Icons.note_outlined,
+                                      size: 18,
+                                      color: AppColors.primary,
+                                    ),
                                     const SizedBox(width: 8),
                                     Text(
                                       "Reason",
-                                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textMain),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textMain,
+                                      ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
                                   reason,
-                                  style: GoogleFonts.inter(fontSize: 13, color: Colors.grey[700], height: 1.4),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: Colors.grey[700],
+                                    height: 1.4,
+                                  ),
                                 ),
                               ],
                             ),
@@ -574,7 +1042,11 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 20),
                         Text(
                           "Items/Particulars",
-                          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMain),
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMain,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         if (items.isEmpty)
@@ -585,7 +1057,10 @@ class _HomePageState extends State<HomePage> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Center(
-                              child: Text("No items listed", style: GoogleFonts.inter(color: Colors.grey)),
+                              child: Text(
+                                "No items listed",
+                                style: GoogleFonts.inter(color: Colors.grey),
+                              ),
                             ),
                           )
                         else
@@ -593,12 +1068,15 @@ class _HomePageState extends State<HomePage> {
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: items.length,
-                            separatorBuilder: (context, index) => const Divider(height: 1),
+                            separatorBuilder: (context, index) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final item = items[index];
                               final itemAmount = item['amount'] ?? 0;
                               return Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -606,29 +1084,43 @@ class _HomePageState extends State<HomePage> {
                                       width: 28,
                                       height: 28,
                                       decoration: BoxDecoration(
-                                        color: AppColors.primary.withValues(alpha: 0.1),
+                                        color: AppColors.primary.withValues(
+                                          alpha: 0.1,
+                                        ),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Center(
                                         child: Text(
                                           "${index + 1}",
-                                          style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12),
+                                          style: GoogleFonts.inter(
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.primary,
+                                            fontSize: 12,
+                                          ),
                                         ),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             item['description'] ?? '',
-                                            style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 14, color: AppColors.textMain),
+                                            style: GoogleFonts.inter(
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 14,
+                                              color: AppColors.textMain,
+                                            ),
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
                                             "Amount: P${NumberFormat('#,##0.00').format(itemAmount)}",
-                                            style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600]),
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -650,11 +1142,19 @@ class _HomePageState extends State<HomePage> {
                             children: [
                               Text(
                                 "GRAND TOTAL:",
-                                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textMain),
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textMain,
+                                ),
                               ),
                               Text(
                                 "P${NumberFormat('#,##0.00').format(amount)}",
-                                style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                style: GoogleFonts.inter(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
                               ),
                             ],
                           ),
@@ -669,20 +1169,37 @@ class _HomePageState extends State<HomePage> {
                               child: OutlinedButton.icon(
                                 onPressed: () {
                                   Navigator.pop(context);
-                                  _showApplyPopup(context, data['userId'], existingData: data);
+                                  _showApplyPopup(
+                                    context,
+                                    data['userId'],
+                                    existingData: data,
+                                  );
                                 },
                                 icon: Icon(
-                                  status == 'Rejected' ? Icons.refresh : Icons.edit_outlined,
+                                  status == 'Rejected'
+                                      ? Icons.refresh
+                                      : Icons.edit_outlined,
                                   size: 18,
                                   color: AppColors.primary,
                                 ),
                                 label: Text(
-                                  status == 'Rejected' ? "Resubmit Application" : "Edit Request",
-                                  style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: AppColors.primary),
+                                  status == 'Rejected'
+                                      ? "Resubmit Application"
+                                      : "Edit Request",
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  side: BorderSide(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
                               ),
                             ),
@@ -700,11 +1217,16 @@ class _HomePageState extends State<HomePage> {
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: Colors.grey[300]!),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: Text(
                         "Close",
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
                   ),
@@ -717,11 +1239,19 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _detailRow(String label, String value, {bool isBold = false, Color? valueColor}) {
+  Widget _detailRow(
+    String label,
+    String value, {
+    bool isBold = false,
+    Color? valueColor,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600])),
+        Text(
+          label,
+          style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
+        ),
         Text(
           value,
           style: GoogleFonts.inter(
@@ -743,15 +1273,23 @@ class _HomePageState extends State<HomePage> {
             listenable: _notificationService,
             builder: (context, child) {
               return AlertDialog(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 title: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Notifications", style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-                        IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(context)),
+                        Text(
+                          "Notifications",
+                          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () => Navigator.pop(context),
+                        ),
                       ],
                     ),
                     if (_notificationService.notifications.isNotEmpty)
@@ -766,16 +1304,30 @@ class _HomePageState extends State<HomePage> {
                                 setDialogState(() {});
                               },
                               icon: const Icon(Icons.done_all, size: 16),
-                              label: const Text("Read All", style: TextStyle(fontSize: 12)),
+                              label: const Text(
+                                "Read All",
+                                style: TextStyle(fontSize: 12),
+                              ),
                             ),
                             const SizedBox(width: 8),
                             TextButton.icon(
                               onPressed: () async {
-                                await _notificationService.clearUserNotifications();
+                                await _notificationService
+                                    .clearUserNotifications();
                                 setDialogState(() {});
                               },
-                              icon: const Icon(Icons.delete_sweep_outlined, size: 16, color: Colors.red),
-                              label: const Text("Clear All", style: TextStyle(color: Colors.red, fontSize: 12)),
+                              icon: const Icon(
+                                Icons.delete_sweep_outlined,
+                                size: 16,
+                                color: Colors.red,
+                              ),
+                              label: const Text(
+                                "Clear All",
+                                style: TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -790,57 +1342,93 @@ class _HomePageState extends State<HomePage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.notifications_off_outlined, size: 50, color: Colors.grey),
+                              const Icon(
+                                Icons.notifications_off_outlined,
+                                size: 50,
+                                color: Colors.grey,
+                              ),
                               const SizedBox(height: 10),
-                              Text("No notifications", style: GoogleFonts.inter(color: Colors.grey)),
+                              Text(
+                                "No notifications",
+                                style: GoogleFonts.inter(color: Colors.grey),
+                              ),
                             ],
                           ),
                         )
                       : ListView.builder(
                           itemCount: _notificationService.notifications.length,
                           itemBuilder: (context, index) {
-                            final note = _notificationService.notifications[index];
+                            final note =
+                                _notificationService.notifications[index];
                             return Dismissible(
                               key: Key(note.id),
                               onDismissed: (direction) async {
-                                await _notificationService.clearUserNotifications();
+                                await _notificationService
+                                    .clearUserNotifications();
                               },
                               background: Container(
                                 color: Colors.red,
                                 alignment: Alignment.centerRight,
                                 padding: const EdgeInsets.only(right: 20),
-                                child: const Icon(Icons.delete, color: Colors.white),
+                                child: const Icon(
+                                  Icons.delete,
+                                  color: Colors.white,
+                                ),
                               ),
                               child: ListTile(
                                 contentPadding: EdgeInsets.zero,
                                 leading: CircleAvatar(
-                                  backgroundColor: note.color.withValues(alpha: 0.2),
+                                  backgroundColor: note.color.withValues(
+                                    alpha: 0.2,
+                                  ),
                                   radius: 12,
-                                  child: CircleAvatar(backgroundColor: note.color, radius: 6),
+                                  child: CircleAvatar(
+                                    backgroundColor: note.color,
+                                    radius: 6,
+                                  ),
                                 ),
                                 title: Text(
                                   note.title,
                                   style: GoogleFonts.inter(
-                                    fontWeight: note.isRead ? FontWeight.normal : FontWeight.bold,
+                                    fontWeight: note.isRead
+                                        ? FontWeight.normal
+                                        : FontWeight.bold,
                                     fontSize: 14,
                                   ),
                                 ),
-                                subtitle: Text(note.message, style: GoogleFonts.inter(fontSize: 13)),
+                                subtitle: Text(
+                                  note.message,
+                                  style: GoogleFonts.inter(fontSize: 13),
+                                ),
                                 trailing: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Text(DateFormat('hh:mm a').format(note.timestamp), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                    Text(
+                                      DateFormat(
+                                        'hh:mm a',
+                                      ).format(note.timestamp),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
                                     if (!note.isRead)
                                       Container(
                                         margin: const EdgeInsets.only(top: 4),
                                         width: 8,
                                         height: 8,
-                                        decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.blue,
+                                          shape: BoxShape.circle,
+                                        ),
                                       ),
                                   ],
                                 ),
                                 onTap: () async {
-                                  await _notificationService.markAsRead('notifications', note.id);
+                                  await _notificationService.markAsRead(
+                                    'notifications',
+                                    note.id,
+                                  );
                                   setDialogState(() {});
                                 },
                               ),
@@ -851,7 +1439,10 @@ class _HomePageState extends State<HomePage> {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text("Close", style: GoogleFonts.inter(color: AppColors.textSecondary)),
+                    child: Text(
+                      "Close",
+                      style: GoogleFonts.inter(color: AppColors.textSecondary),
+                    ),
                   ),
                 ],
               );
@@ -876,7 +1467,8 @@ class _HomePageState extends State<HomePage> {
         child: const Icon(Icons.add, color: Colors.white, size: 30),
       ),
       body: RefreshIndicator(
-        onRefresh: () async => await Future.delayed(const Duration(milliseconds: 500)),
+        onRefresh: () async =>
+            await Future.delayed(const Duration(milliseconds: 500)),
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -893,7 +1485,11 @@ class _HomePageState extends State<HomePage> {
                   'assets/images/logo.png',
                   height: 65,
                   fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.account_balance_wallet, color: AppColors.primary, size: 40),
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.account_balance_wallet,
+                    color: AppColors.primary,
+                    size: 40,
+                  ),
                 ),
               ),
               actions: [
@@ -909,7 +1505,11 @@ class _HomePageState extends State<HomePage> {
                             label: Text(_notificationService.count.toString()),
                             isLabelVisible: _notificationService.count > 0,
                             backgroundColor: Colors.red,
-                            child: const Icon(Icons.notifications_none_outlined, color: AppColors.textMain, size: 26),
+                            child: const Icon(
+                              Icons.notifications_none_outlined,
+                              color: AppColors.textMain,
+                              size: 26,
+                            ),
                           ),
                           onPressed: () => _showNotificationDialog(context),
                         ),
@@ -922,14 +1522,22 @@ class _HomePageState extends State<HomePage> {
                   child: Padding(
                     padding: const EdgeInsets.only(top: 12.0, right: 8.0),
                     child: PopupMenuButton<String>(
-                      icon: const Icon(Icons.menu, color: AppColors.textMain, size: 28),
+                      icon: const Icon(
+                        Icons.menu,
+                        color: AppColors.textMain,
+                        size: 28,
+                      ),
                       offset: const Offset(0, 50),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
                       onSelected: (value) async {
                         if (value == 'logout') {
                           await authService.signOut();
                           if (context.mounted) {
-                            Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                            Navigator.of(
+                              context,
+                            ).pushNamedAndRemoveUntil('/', (route) => false);
                           }
                         }
                       },
@@ -947,10 +1555,17 @@ class _HomePageState extends State<HomePage> {
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 8.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18.0,
+                  vertical: 8.0,
+                ),
                 child: Text(
                   "Recent Activity",
-                  style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textMain),
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMain,
+                  ),
                 ),
               ),
             ),
@@ -966,7 +1581,10 @@ class _HomePageState extends State<HomePage> {
     if (uid.isEmpty) return const SizedBox.shrink();
 
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('advances').where('userId', isEqualTo: uid).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('advances')
+          .where('userId', isEqualTo: uid)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return const SizedBox.shrink();
 
@@ -990,16 +1608,40 @@ class _HomePageState extends State<HomePage> {
             return isSmall
                 ? Column(
                     children: [
-                      _summaryCard("Total Approved", "₱${NumberFormat('#,##0.00').format(totalApproved)}", Icons.payments, AppColors.primary),
+                      _summaryCard(
+                        "Total Approved",
+                        "P${NumberFormat('#,##0.00').format(totalApproved)}",
+                        Icons.payments,
+                        AppColors.primary,
+                      ),
                       const SizedBox(height: 10),
-                      _summaryCard("Pending Requests", pendingCount.toString(), Icons.history, Colors.orange),
+                      _summaryCard(
+                        "Pending Requests",
+                        pendingCount.toString(),
+                        Icons.history,
+                        Colors.orange,
+                      ),
                     ],
                   )
                 : Row(
                     children: [
-                      Expanded(child: _summaryCard("Total Approved", "₱${NumberFormat('#,##0.00').format(totalApproved)}", Icons.payments, AppColors.primary)),
+                      Expanded(
+                        child: _summaryCard(
+                          "Total Approved",
+                          "P${NumberFormat('#,##0.00').format(totalApproved)}",
+                          Icons.payments,
+                          AppColors.primary,
+                        ),
+                      ),
                       const SizedBox(width: 12),
-                      Expanded(child: _summaryCard("Pending", pendingCount.toString(), Icons.history, Colors.orange)),
+                      Expanded(
+                        child: _summaryCard(
+                          "Pending",
+                          pendingCount.toString(),
+                          Icons.history,
+                          Colors.orange,
+                        ),
+                      ),
                     ],
                   );
           },
@@ -1014,18 +1656,41 @@ class _HomePageState extends State<HomePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          CircleAvatar(backgroundColor: color.withValues(alpha: 0.1), child: Icon(icon, color: color, size: 20)),
+          CircleAvatar(
+            backgroundColor: color.withValues(alpha: 0.1),
+            child: Icon(icon, color: color, size: 20),
+          ),
           const SizedBox(width: 12),
           Flexible(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[600])),
-                Text(value, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textMain), overflow: TextOverflow.ellipsis),
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  value,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textMain,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
@@ -1050,7 +1715,12 @@ class _HomePageState extends State<HomePage> {
 
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SliverToBoxAdapter(
-            child: Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator())),
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(),
+              ),
+            ),
           );
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -1071,11 +1741,19 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildAdvanceCard(BuildContext context, Map<String, dynamic> data, String docId) {
+  Widget _buildAdvanceCard(
+    BuildContext context,
+    Map<String, dynamic> data,
+    String docId,
+  ) {
     String status = data['status'] ?? 'Pending';
-    Color statusColor = status == 'Approved' ? Colors.green : (status == 'Rejected' ? Colors.redAccent : Colors.orange);
+    Color statusColor = status == 'Approved'
+        ? Colors.green
+        : (status == 'Rejected' ? Colors.redAccent : Colors.orange);
 
-    String fundDisplay = "H.O Revolving Funds";
+    String fundDisplay = data['fundSource'] == "Other"
+        ? (data['otherFundSource'] ?? "H.O Revolving Funds")
+        : (data['fundSource'] ?? "H.O Revolving Funds");
 
     String purposeDisplay = '';
     List<dynamic> items = data['items'] ?? [];
@@ -1102,16 +1780,35 @@ class _HomePageState extends State<HomePage> {
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("₱${NumberFormat('#,##0.00').format(data['amount'])}", style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-              Text(data['referenceId'] ?? "", style: GoogleFonts.robotoMono(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+              Text(
+                "P${NumberFormat('#,##0.00').format(data['amount'])}",
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                data['referenceId'] ?? "",
+                style: GoogleFonts.robotoMono(
+                  fontSize: 11,
+                  color: Colors.grey[500],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("$fundDisplay • $purposeDisplay", maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
               Text(
-                data['createdAt'] != null ? DateFormat('MM/dd/yyyy').format((data['createdAt'] as Timestamp).toDate()) : "",
+                "$fundDisplay • $purposeDisplay",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
+              Text(
+                data['createdAt'] != null
+                    ? DateFormat(
+                        'MM/dd/yyyy',
+                      ).format((data['createdAt'] as Timestamp).toDate())
+                    : "",
                 style: const TextStyle(fontSize: 10, color: Colors.grey),
               ),
             ],
@@ -1121,26 +1818,72 @@ class _HomePageState extends State<HomePage> {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10)),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  status,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                ),
               ),
               const SizedBox(width: 4),
+              // Request Form buttons - always available
+              IconButton(
+                tooltip: 'Download Request Form',
+                icon: const Icon(
+                  Icons.description_outlined,
+                  color: Colors.purple,
+                  size: 20,
+                ),
+                onPressed: () => _generateRequestPDF(data, action: 'download'),
+              ),
+              IconButton(
+                tooltip: 'Print Request Form',
+                icon: const Icon(Icons.print, color: Colors.purple, size: 20),
+                onPressed: () => _generateRequestPDF(data, action: 'print'),
+              ),
               if (status == 'Pending' || status == 'Rejected')
                 IconButton(
-                  tooltip: status == 'Rejected' ? 'Resubmit as New' : 'Edit Application',
-                  icon: Icon(status == 'Rejected' ? Icons.refresh : Icons.edit_outlined, color: Colors.blue, size: 20),
-                  onPressed: () => _showApplyPopup(context, data['userId'], existingData: data),
+                  tooltip: status == 'Rejected'
+                      ? 'Resubmit as New'
+                      : 'Edit Application',
+                  icon: Icon(
+                    status == 'Rejected' ? Icons.refresh : Icons.edit_outlined,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
+                  onPressed: () => _showApplyPopup(
+                    context,
+                    data['userId'],
+                    existingData: data,
+                  ),
                 ),
+              // Liquidation Form buttons - only when approved
               if (status == 'Approved') ...[
                 IconButton(
-                  tooltip: 'Download PDF',
-                  icon: const Icon(Icons.file_download_outlined, color: Colors.blue, size: 20),
-                  onPressed: () => _generatePDF(data, action: 'download'),
+                  tooltip: 'Download Liquidation Form',
+                  icon: const Icon(
+                    Icons.file_download_outlined,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
+                  onPressed: () =>
+                      _generateLiquidationPDF(data, action: 'download'),
                 ),
                 IconButton(
-                  tooltip: 'Print PDF',
-                  icon: const Icon(Icons.print_outlined, color: Colors.green, size: 20),
-                  onPressed: () => _generatePDF(data, action: 'print'),
+                  tooltip: 'Print Liquidation Form',
+                  icon: const Icon(
+                    Icons.print_outlined,
+                    color: Colors.green,
+                    size: 20,
+                  ),
+                  onPressed: () =>
+                      _generateLiquidationPDF(data, action: 'print'),
                 ),
               ],
             ],
@@ -1150,10 +1893,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _showApplyPopup(BuildContext context, String uid, {String? editDocId, Map<String, dynamic>? existingData}) async {
+  void _showApplyPopup(
+    BuildContext context,
+    String uid, {
+    String? editDocId,
+    Map<String, dynamic>? existingData,
+  }) async {
     if (uid.isEmpty) return;
 
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
     final userData = userDoc.data() ?? {};
 
     List<TextEditingController> descriptionControllers = [];
@@ -1163,16 +1914,34 @@ class _HomePageState extends State<HomePage> {
     if (existingData != null && existingData['items'] != null) {
       items = List<Map<String, dynamic>>.from(existingData['items']);
     } else {
-      items = [{'description': '', 'amount': 0.0}];
+      items = [
+        {'description': '', 'amount': 0.0},
+      ];
     }
 
     for (var item in items) {
-      descriptionControllers.add(TextEditingController(text: item['description']));
-      amountControllers.add(TextEditingController(text: item['amount'] > 0 ? item['amount'].toString() : ''));
+      descriptionControllers.add(
+        TextEditingController(text: item['description']),
+      );
+      amountControllers.add(
+        TextEditingController(
+          text: item['amount'] > 0 ? item['amount'].toString() : '',
+        ),
+      );
     }
 
-    final TextEditingController reasonController = TextEditingController(text: existingData?['reason'] ?? '');
+    final TextEditingController reasonController = TextEditingController(
+      text: existingData?['reason'] ?? '',
+    );
     bool localShowItemsWarning = false;
+
+    // Fund source dropdown value
+    String selectedFundSource =
+        existingData?['fundSource'] ?? "H.O Revolving Funds";
+    final TextEditingController otherFundController = TextEditingController(
+      text: existingData?['otherFundSource'] ?? '',
+    );
+    bool showOtherField = selectedFundSource == "Other";
 
     if (!context.mounted) return;
 
@@ -1183,7 +1952,7 @@ class _HomePageState extends State<HomePage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
           bool localShowReasonWarning = false;
-          
+
           void addItem() {
             setModalState(() {
               items.add({'description': '', 'amount': 0.0});
@@ -1205,16 +1974,28 @@ class _HomePageState extends State<HomePage> {
           void updateItemsFromControllers() {
             for (int i = 0; i < items.length; i++) {
               items[i]['description'] = descriptionControllers[i].text;
-              items[i]['amount'] = double.tryParse(amountControllers[i].text) ?? 0;
+              items[i]['amount'] =
+                  double.tryParse(amountControllers[i].text) ?? 0;
             }
           }
 
           updateItemsFromControllers();
-          double totalAmount = items.fold(0, (total, item) => total + (item['amount'] ?? 0));
+          double totalAmount = items.fold(
+            0,
+            (total, item) => total + (item['amount'] ?? 0),
+          );
 
           return Container(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
-            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+              left: 20,
+              right: 20,
+              top: 20,
+            ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            ),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1224,51 +2005,153 @@ class _HomePageState extends State<HomePage> {
                     child: Container(
                       width: 40,
                       height: 4,
-                      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
                   Text(
                     editDocId == null
                         ? "Apply for Advance"
-                        : (existingData?['status'] == 'Rejected' ? "Resubmit Application" : "Edit Request"),
-                    style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold),
+                        : (existingData?['status'] == 'Rejected'
+                              ? "Resubmit Application"
+                              : "Edit Request"),
+                    style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 15),
-                  _infoRow("Employee", "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}"),
-                  _infoRow("ID / Dept", "${userData['employeeId'] ?? ''} | ${userData['department'] ?? ''}"),
+                  _infoRow(
+                    "Employee",
+                    "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}",
+                  ),
+                  _infoRow(
+                    "ID / Dept",
+                    "${userData['employeeId'] ?? ''} | ${userData['department'] ?? ''}",
+                  ),
                   const SizedBox(height: 15),
-                  
-                  // Fund Source Display (read-only)
+
+                  // Fund Source Dropdown
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                    decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Fund Source", style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary)),
-                        Text("H.O Revolving Funds", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textMain)),
+                        Text(
+                          "Fund Source",
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMain,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedFundSource,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey[100],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: "H.O Revolving Funds",
+                              child: Text("H.O Revolving Funds"),
+                            ),
+                            DropdownMenuItem(
+                              value: "Other",
+                              child: Text("Other"),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setModalState(() {
+                              selectedFundSource = value!;
+                              showOtherField = value == "Other";
+                              if (!showOtherField) {
+                                otherFundController.clear();
+                              }
+                            });
+                          },
+                        ),
+                        if (showOtherField) ...[
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: otherFundController,
+                            decoration: InputDecoration(
+                              labelText: "Specify Fund Source",
+                              labelStyle: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: Colors.grey[600],
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[100],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  
+
+                  const SizedBox(height: 5),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
                         children: [
-                          Text("Items/Particulars", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMain)),
+                          Text(
+                            "Items/Particulars",
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textMain,
+                            ),
+                          ),
                           const SizedBox(width: 8),
-                          Text("*", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)),
-                          Text(" (Required)", style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[500])),
+                          Text(
+                            "*",
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                            ),
+                          ),
+                          Text(
+                            " (Required)",
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.grey[500],
+                            ),
+                          ),
                         ],
                       ),
                       TextButton.icon(
                         onPressed: addItem,
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text("Add Item"),
-                        style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                        ),
                       ),
                     ],
                   ),
@@ -1279,7 +2162,12 @@ class _HomePageState extends State<HomePage> {
                     decoration: BoxDecoration(
                       color: Colors.grey[50],
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: localShowItemsWarning ? Colors.red : Colors.grey[200]!, width: localShowItemsWarning ? 2 : 1),
+                      border: Border.all(
+                        color: localShowItemsWarning
+                            ? Colors.red
+                            : Colors.grey[200]!,
+                        width: localShowItemsWarning ? 2 : 1,
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1289,16 +2177,31 @@ class _HomePageState extends State<HomePage> {
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey[200]!),
+                            ),
                             child: Column(
                               children: [
                                 Row(
                                   children: [
-                                    Expanded(child: Text("Item ${index + 1}", style: GoogleFonts.inter(fontWeight: FontWeight.w500, color: AppColors.primary))),
+                                    Expanded(
+                                      child: Text(
+                                        "Item ${index + 1}",
+                                        style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
                                     if (items.length > 1)
                                       IconButton(
                                         onPressed: () => removeItem(index),
-                                        icon: const Icon(Icons.delete_outline, size: 20),
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          size: 20,
+                                        ),
                                         color: Colors.red,
                                         tooltip: "Remove item",
                                       ),
@@ -1311,19 +2214,47 @@ class _HomePageState extends State<HomePage> {
                                     labelText: "Item Description",
                                     labelStyle: GoogleFonts.inter(
                                       fontSize: 13,
-                                      color: localShowItemsWarning && descriptionControllers[index].text.trim().isEmpty ? Colors.red : Colors.grey[600],
+                                      color:
+                                          localShowItemsWarning &&
+                                              descriptionControllers[index].text
+                                                  .trim()
+                                                  .isEmpty
+                                          ? Colors.red
+                                          : Colors.grey[600],
                                     ),
                                     filled: true,
                                     fillColor: Colors.grey[100],
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary)),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
                                   ),
                                   maxLines: 2,
                                   onChanged: (_) {
                                     setModalState(() {
                                       updateItemsFromControllers();
-                                      if (descriptionControllers[index].text.trim().isNotEmpty && 
-                                          (amountControllers[index].text.trim().isNotEmpty && double.tryParse(amountControllers[index].text) != null && double.tryParse(amountControllers[index].text)! > 0)) {
+                                      if (descriptionControllers[index].text
+                                              .trim()
+                                              .isNotEmpty &&
+                                          (amountControllers[index].text
+                                                  .trim()
+                                                  .isNotEmpty &&
+                                              double.tryParse(
+                                                    amountControllers[index]
+                                                        .text,
+                                                  ) !=
+                                                  null &&
+                                              double.tryParse(
+                                                    amountControllers[index]
+                                                        .text,
+                                                  )! >
+                                                  0)) {
                                         localShowItemsWarning = false;
                                       }
                                     });
@@ -1332,27 +2263,62 @@ class _HomePageState extends State<HomePage> {
                                 const SizedBox(height: 8),
                                 TextField(
                                   controller: amountControllers[index],
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
                                   decoration: InputDecoration(
-                                    labelText: "Amount (₱)",
+                                    labelText: "Amount (P)",
                                     labelStyle: GoogleFonts.inter(
                                       fontSize: 13,
-                                      color: localShowItemsWarning && (amountControllers[index].text.trim().isEmpty || double.tryParse(amountControllers[index].text) == 0) ? Colors.red : Colors.grey[600],
+                                      color:
+                                          localShowItemsWarning &&
+                                              (amountControllers[index].text
+                                                      .trim()
+                                                      .isEmpty ||
+                                                  double.tryParse(
+                                                        amountControllers[index]
+                                                            .text,
+                                                      ) ==
+                                                      0)
+                                          ? Colors.red
+                                          : Colors.grey[600],
                                     ),
                                     filled: true,
                                     fillColor: Colors.grey[100],
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary)),
-                                    prefixText: "₱ ",
-                                    prefixStyle: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                    prefixText: "P ",
+                                    prefixStyle: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
                                   ),
                                   onChanged: (_) {
                                     setModalState(() {
                                       updateItemsFromControllers();
-                                      if (descriptionControllers[index].text.trim().isNotEmpty && 
-                                          amountControllers[index].text.trim().isNotEmpty &&
-                                          double.tryParse(amountControllers[index].text) != null &&
-                                          double.tryParse(amountControllers[index].text)! > 0) {
+                                      if (descriptionControllers[index].text
+                                              .trim()
+                                              .isNotEmpty &&
+                                          amountControllers[index].text
+                                              .trim()
+                                              .isNotEmpty &&
+                                          double.tryParse(
+                                                amountControllers[index].text,
+                                              ) !=
+                                              null &&
+                                          double.tryParse(
+                                                amountControllers[index].text,
+                                              )! >
+                                              0) {
                                         localShowItemsWarning = false;
                                       }
                                     });
@@ -1364,18 +2330,37 @@ class _HomePageState extends State<HomePage> {
                         }),
                         if (localShowItemsWarning)
                           Padding(
-                            padding: const EdgeInsets.only(top: 8.0, left: 4.0, right: 4.0),
+                            padding: const EdgeInsets.only(
+                              top: 8.0,
+                              left: 4.0,
+                              right: 4.0,
+                            ),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.shade200)),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.shade200),
+                              ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.error_outline, size: 18, color: Colors.red.shade700),
+                                  Icon(
+                                    Icons.error_outline,
+                                    size: 18,
+                                    color: Colors.red.shade700,
+                                  ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
                                       "Please add at least one item with description and amount greater than 0.",
-                                      style: GoogleFonts.inter(fontSize: 13, color: Colors.red.shade700, fontWeight: FontWeight.w500),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: Colors.red.shade700,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -1385,35 +2370,82 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-                  
+
                   const SizedBox(height: 12),
                   Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!, width: 1)),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!, width: 1),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.note_add_outlined, size: 18, color: AppColors.primary),
+                            Icon(
+                              Icons.note_add_outlined,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
                             const SizedBox(width: 8),
-                            Text("Reason / Purpose", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textMain)),
+                            Text(
+                              "Reason / Purpose",
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textMain,
+                              ),
+                            ),
                             const SizedBox(width: 4),
-                            Text("*", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red)),
-                            Text(" (Required)", style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[500])),
+                            Text(
+                              "*",
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red,
+                              ),
+                            ),
+                            Text(
+                              " (Required)",
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.grey[500],
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: reasonController,
                           decoration: InputDecoration(
-                            hintText: "Please provide a reason for this request (e.g., Urgent office supplies, Team building expenses, etc.)",
-                            hintStyle: GoogleFonts.inter(fontSize: 13, color: Colors.grey[400]),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary, width: 2)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            hintText:
+                                "Please provide a reason for this request (e.g., Urgent office supplies, Team building expenses, etc.)",
+                            hintStyle: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: Colors.grey[400],
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 2,
+                              ),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
                           ),
                           maxLines: 3,
                           maxLength: 500,
@@ -1424,24 +2456,56 @@ class _HomePageState extends State<HomePage> {
                               }
                             });
                           },
-                          buildCounter: (context, {required currentLength, required isFocused, maxLength}) {
-                            return Text("$currentLength/$maxLength", style: GoogleFonts.inter(fontSize: 10, color: Colors.grey[500]));
-                          },
+                          buildCounter:
+                              (
+                                context, {
+                                required currentLength,
+                                required isFocused,
+                                maxLength,
+                              }) {
+                                return Text(
+                                  "$currentLength/$maxLength",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    color: Colors.grey[500],
+                                  ),
+                                );
+                              },
                         ),
-                        if (localShowReasonWarning && reasonController.text.trim().isEmpty)
+                        if (localShowReasonWarning &&
+                            reasonController.text.trim().isEmpty)
                           Padding(
-                            padding: const EdgeInsets.only(top: 12.0, left: 4.0, right: 4.0),
+                            padding: const EdgeInsets.only(
+                              top: 12.0,
+                              left: 4.0,
+                              right: 4.0,
+                            ),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.shade200)),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.shade200),
+                              ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.error_outline, size: 18, color: Colors.red.shade700),
+                                  Icon(
+                                    Icons.error_outline,
+                                    size: 18,
+                                    color: Colors.red.shade700,
+                                  ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
                                       "Please provide a reason for this request. This field is required.",
-                                      style: GoogleFonts.inter(fontSize: 13, color: Colors.red.shade700, fontWeight: FontWeight.w500),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: Colors.red.shade700,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -1451,16 +2515,33 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-                  
+
                   Container(
                     margin: const EdgeInsets.only(top: 12, bottom: 20),
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Total Amount:", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textMain)),
-                        Text("₱${NumberFormat('#,##0.00').format(totalAmount)}", style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                        Text(
+                          "Total Amount:",
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textMain,
+                          ),
+                        ),
+                        Text(
+                          "P${NumberFormat('#,##0.00').format(totalAmount)}",
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1468,20 +2549,46 @@ class _HomePageState extends State<HomePage> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                       onPressed: () {
                         updateItemsFromControllers();
-                        bool hasValidItem = items.any((item) => item['description'].toString().trim().isNotEmpty && (item['amount'] ?? 0) > 0);
+                        bool hasValidItem = items.any(
+                          (item) =>
+                              item['description']
+                                  .toString()
+                                  .trim()
+                                  .isNotEmpty &&
+                              (item['amount'] ?? 0) > 0,
+                        );
 
                         if (!hasValidItem) {
-                          setModalState(() { localShowItemsWarning = true; });
-                          _showToast("Please add at least one item with description and amount greater than 0");
+                          setModalState(() {
+                            localShowItemsWarning = true;
+                          });
+                          _showToast(
+                            "Please add at least one item with description and amount greater than 0",
+                          );
                           return;
                         }
 
                         if (reasonController.text.trim().isEmpty) {
-                          setModalState(() { localShowReasonWarning = true; });
-                          _showToast("Please provide a reason for this request");
+                          setModalState(() {
+                            localShowReasonWarning = true;
+                          });
+                          _showToast(
+                            "Please provide a reason for this request",
+                          );
+                          return;
+                        }
+
+                        if (selectedFundSource == "Other" &&
+                            otherFundController.text.trim().isEmpty) {
+                          _showToast("Please specify the fund source");
                           return;
                         }
 
@@ -1491,14 +2598,25 @@ class _HomePageState extends State<HomePage> {
                           totalAmount,
                           items,
                           reason: reasonController.text.trim(),
+                          fundSource: selectedFundSource,
+                          otherFundSource: selectedFundSource == "Other"
+                              ? otherFundController.text.trim()
+                              : null,
                           editDocId: editDocId,
                           existingStatus: existingData?['status'],
                           existingRefId: existingData?['referenceId'],
                         );
                       },
                       child: Text(
-                        editDocId == null ? "Submit" : (existingData?['status'] == 'Rejected' ? "Submit as New" : "Update Request"),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        editDocId == null
+                            ? "Submit"
+                            : (existingData?['status'] == 'Rejected'
+                                  ? "Submit as New"
+                                  : "Update Request"),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -1518,6 +2636,8 @@ class _HomePageState extends State<HomePage> {
     double totalAmount,
     List<Map<String, dynamic>> items, {
     String? reason,
+    String? fundSource,
+    String? otherFundSource,
     String? editDocId,
     String? existingStatus,
     String? existingRefId,
@@ -1527,8 +2647,12 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    final String fullName = "${userDoc.data()?['firstName'] ?? 'User'} ${userDoc.data()?['lastName'] ?? ''}";
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    final String fullName =
+        "${userDoc.data()?['firstName'] ?? 'User'} ${userDoc.data()?['lastName'] ?? ''}";
 
     final data = {
       'userId': uid,
@@ -1538,6 +2662,9 @@ class _HomePageState extends State<HomePage> {
       'status': 'Pending',
       'updatedAt': FieldValue.serverTimestamp(),
       if (reason != null && reason.isNotEmpty) 'reason': reason,
+      'fundSource': fundSource ?? "H.O Revolving Funds",
+      if (otherFundSource != null && otherFundSource.isNotEmpty)
+        'otherFundSource': otherFundSource,
     };
 
     try {
@@ -1555,15 +2682,18 @@ class _HomePageState extends State<HomePage> {
           requesterName: fullName,
           amount: totalAmount,
         );
-        
+
         if (context.mounted) {
           Navigator.pop(context);
           _showToast("Request submitted successfully!", isError: false);
         }
       } else {
         data['referenceId'] = existingRefId ?? _generateCleanRefId();
-        await FirebaseFirestore.instance.collection('advances').doc(editDocId).update(data);
-        
+        await FirebaseFirestore.instance
+            .collection('advances')
+            .doc(editDocId)
+            .update(data);
+
         if (context.mounted) {
           Navigator.pop(context);
           _showToast("Request updated successfully!", isError: false);
@@ -1581,14 +2711,20 @@ class _HomePageState extends State<HomePage> {
         const SizedBox(height: 50),
         Icon(Icons.receipt_long_outlined, size: 60, color: Colors.grey[300]),
         const SizedBox(height: 10),
-        Text("No applications found.", style: GoogleFonts.inter(color: Colors.grey)),
+        Text(
+          "No applications found.",
+          style: GoogleFonts.inter(color: Colors.grey),
+        ),
       ],
     );
   }
 
   Widget _infoRow(String label, String value) => Padding(
     padding: const EdgeInsets.only(bottom: 4.0),
-    child: Text("$label: $value", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+    child: Text(
+      "$label: $value",
+      style: const TextStyle(fontSize: 12, color: Colors.grey),
+    ),
   );
 
   List<PopupMenuEntry<String>> _buildMenuItems(String uid) {
@@ -1598,13 +2734,22 @@ class _HomePageState extends State<HomePage> {
         child: uid.isEmpty
             ? const Text("User")
             : FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .get(),
                 builder: (context, snapshot) {
                   String name = "User";
                   if (snapshot.hasData && snapshot.data!.exists) {
                     name = snapshot.data!['firstName'] ?? "User";
                   }
-                  return Text("Hi, $name", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black));
+                  return Text(
+                    "Hi, $name",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  );
                 },
               ),
       ),
