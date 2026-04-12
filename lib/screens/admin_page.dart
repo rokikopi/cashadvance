@@ -19,6 +19,9 @@ class AdminPage extends StatefulWidget {
 class _AdminPageState extends State<AdminPage> {
   final NotificationService _notificationService = NotificationService();
 
+  // Quarter page size (1/4 of A4)
+  final quarterPage = PdfPageFormat(297, 421);
+
   @override
   void initState() {
     super.initState();
@@ -77,7 +80,7 @@ class _AdminPageState extends State<AdminPage> {
     return number.toString();
   }
 
-  // Request Form PDF
+  // Request Form PDF (Quarter Page with Cut Border)
   Future<void> _generateRequestPDF(
     Map<String, dynamic> data, {
     String action = 'print',
@@ -104,6 +107,7 @@ class _AdminPageState extends State<AdminPage> {
         : DateFormat('MMMM dd, yyyy').format(DateTime.now());
 
     final String refId = data['referenceId'] ?? "N/A";
+    final String reason = data['reason'] ?? "";
     final String fundSource = data['fundSource'] ?? "H.O Revolving Funds";
     final String otherFundSource = data['otherFundSource'] ?? "";
     final String displayFundSource = fundSource == "Other"
@@ -115,311 +119,222 @@ class _AdminPageState extends State<AdminPage> {
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        pageFormat: quarterPage,
         build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Container(
-                padding: const pw.EdgeInsets.all(12),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.teal700,
-                  borderRadius: pw.BorderRadius.circular(4),
-                ),
-                child: pw.Center(
-                  child: pw.Text(
-                    "CASH ADVANCE REQUEST",
-                    style: pw.TextStyle(
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.white,
-                    ),
-                  ),
-                ),
-              ),
-              pw.SizedBox(height: 20),
-
-              pw.Row(
-                children: [
-                  pw.Expanded(
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(8),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(color: PdfColors.grey),
-                      ),
-                      child: pw.Row(
-                        children: [
-                          pw.SizedBox(
-                            width: 80,
-                            child: pw.Text(
-                              "EMPLOYEE:",
-                              style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          pw.Text(
-                            employeeName.isEmpty
-                                ? "_______________"
-                                : employeeName,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  pw.SizedBox(width: 10),
-                  pw.Expanded(
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(8),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(color: PdfColors.grey),
-                      ),
-                      child: pw.Row(
-                        children: [
-                          pw.SizedBox(
-                            width: 50,
-                            child: pw.Text(
-                              "NO:",
-                              style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          pw.Text(refId),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 10),
-
-              pw.Row(
-                children: [
-                  pw.Expanded(
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(8),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(color: PdfColors.grey),
-                      ),
-                      child: pw.Row(
-                        children: [
-                          pw.SizedBox(
-                            width: 120,
-                            child: pw.Text(
-                              "POSITION/DEPT:",
-                              style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          pw.Text(
-                            positionDept.isEmpty
-                                ? "_______________"
-                                : positionDept,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  pw.SizedBox(width: 10),
-                  pw.Expanded(
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(8),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(color: PdfColors.grey),
-                      ),
-                      child: pw.Row(
-                        children: [
-                          pw.SizedBox(
-                            width: 60,
-                            child: pw.Text(
-                              "DATE:",
-                              style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          pw.Text(dateStr),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 20),
-
-              pw.Container(
-                padding: const pw.EdgeInsets.all(8),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey),
-                ),
-                child: pw.Row(
-                  children: [
-                    pw.SizedBox(
-                      width: 100,
-                      child: pw.Text(
-                        "FUND SOURCE:",
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                      ),
-                    ),
-                    pw.Text(displayFundSource),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 20),
-
-              pw.Container(
-                padding: const pw.EdgeInsets.all(8),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.teal700,
-                  borderRadius: pw.BorderRadius.circular(4),
-                ),
-                child: pw.Row(
-                  children: [
-                    pw.Expanded(
-                      flex: 3,
-                      child: pw.Text(
-                        "PURPOSE DESCRIPTION",
-                        style: pw.TextStyle(
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.white,
-                        ),
-                      ),
-                    ),
-                    pw.Expanded(
-                      flex: 1,
-                      child: pw.Text(
-                        "AMOUNT",
-                        style: pw.TextStyle(
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.white,
-                        ),
-                        textAlign: pw.TextAlign.right,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              for (var item in items)
+          return pw.Container(
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.black, width: 1),
+            ),
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Title
                 pw.Container(
-                  padding: const pw.EdgeInsets.all(8),
+                  padding: const pw.EdgeInsets.all(4),
                   decoration: pw.BoxDecoration(
-                    border: pw.Border(
-                      left: pw.BorderSide(color: PdfColors.grey),
-                      right: pw.BorderSide(color: PdfColors.grey),
-                      bottom: pw.BorderSide(color: PdfColors.grey),
+                    color: PdfColors.teal700,
+                    borderRadius: pw.BorderRadius.circular(4),
+                  ),
+                  child: pw.Center(
+                    child: pw.Text(
+                      "CASH ADVANCE REQUEST",
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white,
+                      ),
                     ),
+                  ),
+                ),
+                pw.SizedBox(height: 6),
+
+                // Row: Employee and No
+                pw.Row(
+                  children: [
+                    pw.Expanded(
+                      child: _quarterInfoRow(
+                        "EMPLOYEE:",
+                        employeeName.isEmpty ? "_______________" : employeeName,
+                      ),
+                    ),
+                    pw.SizedBox(width: 4),
+                    pw.Expanded(child: _quarterInfoRow("NO.:", refId)),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+
+                // Row: Position/Dept and Date
+                pw.Row(
+                  children: [
+                    pw.Expanded(
+                      child: _quarterInfoRow(
+                        "POSITION/DEPT:",
+                        positionDept.isEmpty ? "_______________" : positionDept,
+                      ),
+                    ),
+                    pw.SizedBox(width: 4),
+                    pw.Expanded(child: _quarterInfoRow("DATE:", dateStr)),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+
+                // Fund Source
+                _quarterInfoRow("FUND SOURCE:", displayFundSource),
+                pw.SizedBox(height: 6),
+
+                // Items Table
+                pw.Container(
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      // Table Header
+                      pw.Container(
+                        padding: const pw.EdgeInsets.all(4),
+                        decoration: pw.BoxDecoration(color: PdfColors.teal700),
+                        child: pw.Row(
+                          children: [
+                            pw.Expanded(
+                              flex: 3,
+                              child: pw.Text(
+                                "PURPOSE DESCRIPTION",
+                                style: pw.TextStyle(
+                                  fontSize: 7,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: PdfColors.white,
+                                ),
+                              ),
+                            ),
+                            pw.Expanded(
+                              flex: 1,
+                              child: pw.Text(
+                                "AMOUNT",
+                                style: pw.TextStyle(
+                                  fontSize: 7,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: PdfColors.white,
+                                ),
+                                textAlign: pw.TextAlign.right,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Items Rows
+                      for (var item in items)
+                        pw.Container(
+                          padding: const pw.EdgeInsets.all(4),
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border(
+                              bottom: pw.BorderSide(color: PdfColors.grey),
+                            ),
+                          ),
+                          child: pw.Row(
+                            children: [
+                              pw.Expanded(
+                                flex: 3,
+                                child: pw.Text(
+                                  item['description'] ?? '',
+                                  style: pw.TextStyle(fontSize: 7),
+                                ),
+                              ),
+                              pw.Expanded(
+                                flex: 1,
+                                child: pw.Text(
+                                  "P${NumberFormat('#,##0.00').format(item['amount'] ?? 0)}",
+                                  style: pw.TextStyle(fontSize: 7),
+                                  textAlign: pw.TextAlign.right,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Reason Row
+                      if (reason.isNotEmpty)
+                        pw.Container(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Row(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Expanded(
+                                flex: 3,
+                                child: pw.Text(
+                                  reason,
+                                  style: pw.TextStyle(fontSize: 7),
+                                ),
+                              ),
+                              pw.Expanded(flex: 1, child: pw.Text("")),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Total
+                pw.SizedBox(height: 2),
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(4),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey),
                   ),
                   child: pw.Row(
                     children: [
                       pw.Expanded(
                         flex: 3,
-                        child: pw.Text(item['description'] ?? ''),
+                        child: pw.Text(
+                          "TOTAL:",
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 7,
+                          ),
+                        ),
                       ),
                       pw.Expanded(
                         flex: 1,
                         child: pw.Text(
-                          "P${NumberFormat('#,##0.00').format(item['amount'] ?? 0)}",
+                          "P${NumberFormat('#,##0.00').format(totalAmount)}",
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 7,
+                          ),
                           textAlign: pw.TextAlign.right,
                         ),
                       ),
                     ],
                   ),
                 ),
+                pw.SizedBox(height: 8),
 
-              pw.Container(
-                padding: const pw.EdgeInsets.all(8),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey),
-                ),
-                child: pw.Row(
+                // Signatures Row
+                pw.Row(
                   children: [
                     pw.Expanded(
-                      flex: 3,
-                      child: pw.Text(
-                        "TOTAL:",
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      child: _quarterSignatureBlock(
+                        "REQUESTED BY:",
+                        "Name & Signature of Employee",
                       ),
                     ),
+                    pw.SizedBox(width: 8),
                     pw.Expanded(
-                      flex: 1,
-                      child: pw.Text(
-                        "P${NumberFormat('#,##0.00').format(totalAmount)}",
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        textAlign: pw.TextAlign.right,
+                      child: _quarterSignatureBlock(
+                        "CHECKED BY:",
+                        "Department Head",
                       ),
                     ),
                   ],
                 ),
-              ),
-              pw.SizedBox(height: 30),
+                pw.SizedBox(height: 6),
 
-              pw.Row(
-                children: [
-                  pw.Expanded(
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          "REQUESTED BY:",
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                        pw.SizedBox(height: 40),
-                        pw.Container(
-                          width: 180,
-                          child: pw.Text("_________________________"),
-                        ),
-                        pw.SizedBox(height: 5),
-                        pw.Text(
-                          "Name & Signature of Employee",
-                          style: pw.TextStyle(fontSize: 9),
-                        ),
-                      ],
-                    ),
-                  ),
-                  pw.Expanded(
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          "CHECKED BY:",
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                        pw.SizedBox(height: 40),
-                        pw.Container(
-                          width: 180,
-                          child: pw.Text("_________________________"),
-                        ),
-                        pw.SizedBox(height: 5),
-                        pw.Text(
-                          "Department Head",
-                          style: pw.TextStyle(fontSize: 9),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 30),
-
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    "RELEASED BY:",
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                  ),
-                  pw.SizedBox(height: 40),
-                  pw.Container(
-                    width: 200,
-                    child: pw.Text("_________________________"),
-                  ),
-                ],
-              ),
-            ],
+                // Released By
+                _quarterSignatureBlock("RELEASED BY:", ""),
+              ],
+            ),
           );
         },
       ),
@@ -437,10 +352,11 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  // Liquidation Form PDF
+  // Liquidation Form PDF (Quarter Page with Cut Border)
   Future<void> _generateLiquidationPDF(
     Map<String, dynamic> data, {
     String action = 'print',
+    bool includeVat = true,
   }) async {
     final pdf = pw.Document();
 
@@ -487,106 +403,126 @@ class _AdminPageState extends State<AdminPage> {
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        pageFormat: quarterPage,
         build: (pw.Context context) {
           return pw.Container(
-            padding: const pw.EdgeInsets.all(15),
             decoration: pw.BoxDecoration(
               border: pw.Border.all(color: PdfColors.black, width: 1),
             ),
+            padding: const pw.EdgeInsets.all(8),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
+                // Header
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text(
                       fundType,
                       style: pw.TextStyle(
-                        fontSize: 14,
+                        fontSize: 7,
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
-                    pw.SizedBox(),
+                    pw.Text("Ref: $refId", style: pw.TextStyle(fontSize: 6)),
                   ],
                 ),
-                pw.SizedBox(height: 20),
-                _pdfRow("Pay to", employeeName),
-                pw.SizedBox(height: 3),
-                if (userPosition.isNotEmpty) _pdfRow("Position", userPosition),
+                pw.SizedBox(height: 4),
+
+                // Pay to and Position/Department
+                _quarterInfoRow("Pay to", employeeName),
+                if (userPosition.isNotEmpty)
+                  _quarterInfoRow("Position", userPosition),
                 if (userDepartment.isNotEmpty)
-                  _pdfRow("Department", userDepartment),
-                pw.SizedBox(height: 5),
+                  _quarterInfoRow("Department", userDepartment),
+                pw.SizedBox(height: 3),
+
+                // Items list (without amounts)
                 if (items.isNotEmpty) ...[
-                  _pdfRow("Items", ""),
-                  pw.SizedBox(height: 5),
-                  pw.Container(
-                    margin: const pw.EdgeInsets.only(left: 20),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: items.asMap().entries.map((entry) {
-                        int idx = entry.key + 1;
-                        Map<String, dynamic> item = entry.value;
-                        return pw.Padding(
-                          padding: const pw.EdgeInsets.symmetric(vertical: 2),
-                          child: pw.Row(
-                            children: [
-                              pw.SizedBox(width: 30, child: pw.Text("$idx.")),
-                              pw.Expanded(child: pw.Text(item['description'])),
-                            ],
-                          ),
-                        );
-                      }).toList(),
+                  _quarterInfoRow("Items", ""),
+                  for (var item in items)
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.only(left: 12),
+                      child: pw.Text(
+                        "• ${item['description']}",
+                        style: pw.TextStyle(fontSize: 6),
+                      ),
                     ),
-                  ),
                 ],
                 pw.SizedBox(height: 3),
-                _pdfRow("Amt in Words", amountInWords),
-                pw.SizedBox(height: 3),
-                _pdfRow(
+
+                // Amount in Words and Total
+                _quarterInfoRow("Amt in Words", amountInWords),
+                _quarterInfoRow(
                   "Total Amount",
                   "P${NumberFormat('#,##0.00').format(amount)}",
                 ),
-                pw.SizedBox(height: 15),
+                pw.SizedBox(height: 4),
+
+                // No. and Date
                 pw.Row(
                   children: [
                     pw.Text(
                       "No. : ",
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 6,
+                      ),
                     ),
-                    pw.Text(refId),
-                    pw.SizedBox(width: 30),
+                    pw.Text(refId, style: pw.TextStyle(fontSize: 6)),
+                    pw.SizedBox(width: 8),
                     pw.Text(
                       "Date : ",
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 6,
+                      ),
                     ),
-                    pw.Text(dateStr),
+                    pw.Text(dateStr, style: pw.TextStyle(fontSize: 6)),
                   ],
                 ),
-                pw.SizedBox(height: 20),
-                _buildLiquidationTable(itemsWithVat, totalVatAmount, amount),
-                pw.SizedBox(height: 30),
+                pw.SizedBox(height: 6),
+
+                // Table (with or without VAT)
+                if (includeVat)
+                  _buildQuarterLiquidationTable(
+                    itemsWithVat,
+                    totalVatAmount,
+                    amount,
+                  )
+                else
+                  _buildQuarterLiquidationTableNoVat(itemsWithVat, amount),
+                pw.SizedBox(height: 8),
+
+                // Signatures
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    _signatureBlock(
-                      "PREPARED BY:",
-                      "$employeeName\n${userPosition.isNotEmpty ? userPosition : "EMPLOYEE"}\n${userDepartment.isNotEmpty ? userDepartment : ""}",
+                    pw.Expanded(
+                      child: _quarterSignatureBlock(
+                        "PREPARED BY:",
+                        "$employeeName\n${userPosition.isNotEmpty ? userPosition : "EMPLOYEE"}",
+                      ),
                     ),
-                    _signatureBlock(
-                      "CHECKED BY:",
-                      "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
+                    pw.SizedBox(width: 8),
+                    pw.Expanded(
+                      child: _quarterSignatureBlock(
+                        "CHECKED BY:",
+                        "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
+                      ),
                     ),
                   ],
                 ),
-                pw.SizedBox(height: 30),
+                pw.SizedBox(height: 6),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.end,
                   children: [
-                    _signatureBlock(
-                      "APPROVED BY:",
-                      "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
+                    pw.SizedBox(
+                      width: 120,
+                      child: _quarterSignatureBlock(
+                        "APPROVED BY:",
+                        "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
+                      ),
                     ),
                   ],
                 ),
@@ -609,26 +545,53 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  pw.Widget _pdfRow(String label, String value) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 2),
-      child: pw.Row(
-        children: [
-          pw.SizedBox(
-            width: 80,
-            child: pw.Text(
-              label,
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            ),
+  // Helper for quarter info row
+  pw.Widget _quarterInfoRow(String label, String value) {
+    return pw.Row(
+      children: [
+        pw.SizedBox(
+          width: 70,
+          child: pw.Text(
+            label,
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7),
           ),
-          pw.Text(": "),
-          pw.Text(value),
-        ],
-      ),
+        ),
+        pw.Expanded(child: pw.Text(value, style: pw.TextStyle(fontSize: 7))),
+      ],
     );
   }
 
-  pw.Widget _buildLiquidationTable(
+  // Helper for quarter signature block
+  pw.Widget _quarterSignatureBlock(String title, String subtitle) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          title,
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Container(
+          width: double.infinity,
+          height: 15,
+          child: pw.Text(
+            "_________________________",
+            style: pw.TextStyle(fontSize: 7),
+          ),
+        ),
+        if (subtitle.isNotEmpty) ...[
+          pw.SizedBox(height: 2),
+          pw.Text(
+            subtitle,
+            style: pw.TextStyle(fontSize: 6, fontStyle: pw.FontStyle.italic),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // Quarter liquidation table (with VAT)
+  pw.Widget _buildQuarterLiquidationTable(
     List<Map<String, dynamic>> itemsWithVat,
     double totalVatAmount,
     double totalAmount,
@@ -639,10 +602,10 @@ class _AdminPageState extends State<AdminPage> {
       pw.TableRow(
         decoration: const pw.BoxDecoration(color: PdfColors.grey300),
         children: [
-          _tableCell("Act Code", bold: true),
-          _tableCell("Act Name", bold: true),
-          _tableCell("Debit", bold: true, align: pw.TextAlign.right),
-          _tableCell("Credit", bold: true, align: pw.TextAlign.right),
+          _quarterTableCell("Act Code", bold: true),
+          _quarterTableCell("Act Name", bold: true),
+          _quarterTableCell("Debit", bold: true, align: pw.TextAlign.right),
+          _quarterTableCell("Credit", bold: true, align: pw.TextAlign.right),
         ],
       ),
     );
@@ -650,13 +613,13 @@ class _AdminPageState extends State<AdminPage> {
     rows.add(
       pw.TableRow(
         children: [
-          _tableCell("vat input"),
-          _tableCell(""),
-          _tableCell(
+          _quarterTableCell("vat input"),
+          _quarterTableCell(""),
+          _quarterTableCell(
             "P${NumberFormat('#,##0.00').format(totalVatAmount)}",
             align: pw.TextAlign.right,
           ),
-          _tableCell(""),
+          _quarterTableCell(""),
         ],
       ),
     );
@@ -665,13 +628,13 @@ class _AdminPageState extends State<AdminPage> {
       rows.add(
         pw.TableRow(
           children: [
-            _tableCell(""),
-            _tableCell(item['description']),
-            _tableCell(
+            _quarterTableCell(""),
+            _quarterTableCell(item['description']),
+            _quarterTableCell(
               "P${NumberFormat('#,##0.00').format(item['netAmount'])}",
               align: pw.TextAlign.right,
             ),
-            _tableCell(""),
+            _quarterTableCell(""),
           ],
         ),
       );
@@ -680,10 +643,10 @@ class _AdminPageState extends State<AdminPage> {
     rows.add(
       pw.TableRow(
         children: [
-          _tableCell(""),
-          _tableCell(""),
-          _tableCell(""),
-          _tableCell(
+          _quarterTableCell(""),
+          _quarterTableCell(""),
+          _quarterTableCell(""),
+          _quarterTableCell(
             "P${NumberFormat('#,##0.00').format(totalAmount)}",
             align: pw.TextAlign.right,
           ),
@@ -695,14 +658,14 @@ class _AdminPageState extends State<AdminPage> {
       pw.TableRow(
         decoration: const pw.BoxDecoration(color: PdfColors.grey200),
         children: [
-          _tableCell("TOTAL", bold: true),
-          _tableCell(""),
-          _tableCell(
+          _quarterTableCell("TOTAL", bold: true),
+          _quarterTableCell(""),
+          _quarterTableCell(
             "P${NumberFormat('#,##0.00').format(totalAmount)}",
             bold: true,
             align: pw.TextAlign.right,
           ),
-          _tableCell(
+          _quarterTableCell(
             "P${NumberFormat('#,##0.00').format(totalAmount)}",
             bold: true,
             align: pw.TextAlign.right,
@@ -723,39 +686,103 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  pw.Widget _tableCell(
+  // Quarter liquidation table (without VAT)
+  pw.Widget _buildQuarterLiquidationTableNoVat(
+    List<Map<String, dynamic>> itemsWithVat,
+    double totalAmount,
+  ) {
+    List<pw.TableRow> rows = [];
+
+    rows.add(
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+        children: [
+          _quarterTableCell("Act Code", bold: true),
+          _quarterTableCell("Act Name", bold: true),
+          _quarterTableCell("Debit", bold: true, align: pw.TextAlign.right),
+          _quarterTableCell("Credit", bold: true, align: pw.TextAlign.right),
+        ],
+      ),
+    );
+
+    for (var item in itemsWithVat) {
+      rows.add(
+        pw.TableRow(
+          children: [
+            _quarterTableCell(""),
+            _quarterTableCell(item['description']),
+            _quarterTableCell(
+              "P${NumberFormat('#,##0.00').format(item['grossAmount'])}",
+              align: pw.TextAlign.right,
+            ),
+            _quarterTableCell(""),
+          ],
+        ),
+      );
+    }
+
+    rows.add(
+      pw.TableRow(
+        children: [
+          _quarterTableCell(""),
+          _quarterTableCell(""),
+          _quarterTableCell(""),
+          _quarterTableCell(
+            "P${NumberFormat('#,##0.00').format(totalAmount)}",
+            align: pw.TextAlign.right,
+          ),
+        ],
+      ),
+    );
+
+    rows.add(
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+        children: [
+          _quarterTableCell("TOTAL", bold: true),
+          _quarterTableCell(""),
+          _quarterTableCell(
+            "P${NumberFormat('#,##0.00').format(totalAmount)}",
+            bold: true,
+            align: pw.TextAlign.right,
+          ),
+          _quarterTableCell(
+            "P${NumberFormat('#,##0.00').format(totalAmount)}",
+            bold: true,
+            align: pw.TextAlign.right,
+          ),
+        ],
+      ),
+    );
+
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2),
+        1: const pw.FlexColumnWidth(4),
+        2: const pw.FlexColumnWidth(1.5),
+        3: const pw.FlexColumnWidth(1.5),
+      },
+      children: rows,
+    );
+  }
+
+  // Quarter table cell
+  pw.Widget _quarterTableCell(
     String text, {
     bool bold = false,
     pw.TextAlign align = pw.TextAlign.left,
   }) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.all(5),
+      padding: const pw.EdgeInsets.all(3),
       child: pw.Text(
         text,
         textAlign: align,
         style: pw.TextStyle(
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-          fontSize: 10,
+          fontSize: 6,
         ),
       ),
-    );
-  }
-
-  pw.Widget _signatureBlock(String title, String name) {
-    List<String> lines = name.split('\n');
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          title,
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
-        ),
-        pw.SizedBox(height: 20),
-        pw.Container(width: 200, child: pw.Text("_________________________")),
-        pw.SizedBox(height: 5),
-        for (var line in lines)
-          pw.Text(line, style: const pw.TextStyle(fontSize: 9)),
-      ],
     );
   }
 
@@ -1682,52 +1709,78 @@ class _AdminPageState extends State<AdminPage> {
     Map<String, dynamic> data,
     String status,
   ) {
+    bool includeVat = true;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("$status Application?"),
-        content: Text("Mark this request as $status?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("No"),
-          ),
-          TextButton(
-            onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('advances')
-                  .doc(docId)
-                  .update({
-                    'status': status,
-                    'updatedAt': FieldValue.serverTimestamp(),
-                  });
-
-              final String amount = NumberFormat(
-                '#,##0.00',
-              ).format(data['amount']);
-              final String ref = data['referenceId'] ?? 'N/A';
-
-              await _sendNotificationToUser(
-                userId: data['userId'],
-                title: "Application $status",
-                message: status == "Approved"
-                    ? "Your request for P$amount (REF: $ref) has been approved."
-                    : "Your request for P$amount (REF: $ref) was rejected.",
-                type: status,
-              );
-
-              if (context.mounted) {
-                Navigator.pop(context);
-              }
-            },
-            child: Text(
-              "Yes, $status",
-              style: TextStyle(
-                color: status == "Approved" ? Colors.green : Colors.red,
-              ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text("$status Application?"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text("Mark this request as $status?"),
+                const SizedBox(height: 16),
+                if (status == "Approved")
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: includeVat,
+                        onChanged: (value) {
+                          setState(() {
+                            includeVat = value ?? true;
+                          });
+                        },
+                      ),
+                      const Text("Include VAT in liquidation form"),
+                    ],
+                  ),
+              ],
             ),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("No"),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await FirebaseFirestore.instance
+                      .collection('advances')
+                      .doc(docId)
+                      .update({
+                        'status': status,
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      });
+
+                  final String amount = NumberFormat(
+                    '#,##0.00',
+                  ).format(data['amount']);
+                  final String ref = data['referenceId'] ?? 'N/A';
+
+                  await _sendNotificationToUser(
+                    userId: data['userId'],
+                    title: "Application $status",
+                    message: status == "Approved"
+                        ? "Your request for P$amount (REF: $ref) has been approved."
+                        : "Your request for P$amount (REF: $ref) was rejected.",
+                    type: status,
+                  );
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+                child: Text(
+                  "Yes, $status",
+                  style: TextStyle(
+                    color: status == "Approved" ? Colors.green : Colors.red,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
