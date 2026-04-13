@@ -577,35 +577,37 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  // Helper for quarter signature block
-  pw.Widget _quarterSignatureBlock(String title, String subtitle) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          title,
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-        ),
-        pw.SizedBox(height: 12),
-        pw.Container(
-          width: double.infinity,
+// Helper for quarter signature block
+pw.Widget _quarterSignatureBlock(String title, String subtitle) {
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Text(
+        title,
+        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+      ),
+      pw.SizedBox(height: 8),
+      pw.Container(
+        width: double.infinity,
+        height: 25,
+        child: pw.Center(
           child: pw.Text(
             "_________________________",
             style: pw.TextStyle(fontSize: 8),
-            textAlign: pw.TextAlign.center,
           ),
         ),
-        if (subtitle.isNotEmpty) ...[
-          pw.SizedBox(height: 4),
-          pw.Text(
-            subtitle,
-            style: pw.TextStyle(fontSize: 7, fontStyle: pw.FontStyle.italic),
-            textAlign: pw.TextAlign.center,
-          ),
-        ],
+      ),
+      if (subtitle.isNotEmpty) ...[
+        pw.SizedBox(height: 4),
+        pw.Text(
+          subtitle,
+          style: pw.TextStyle(fontSize: 7, fontStyle: pw.FontStyle.italic),
+          textAlign: pw.TextAlign.center,
+        ),
       ],
-    );
-  }
+    ],
+  );
+}
 
   // Quarter liquidation table (with VAT)
   pw.Widget _buildQuarterLiquidationTable(
