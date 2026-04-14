@@ -173,321 +173,17 @@ class _HomePageState extends State<HomePage> {
     return number.toString();
   }
 
-  // Combined PDF (Request + Liquidation stacked vertically on ONE page)
-  Future<void> _generateCombinedPDF(
-    Map<String, dynamic> data, {
-    String action = 'print',
-  }) async {
-    final pdf = pw.Document();
-
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(data['userId'])
-        .get();
-    final userData = userDoc.data() ?? {};
-
-    final requestForm = await _buildRequestFormWidget(data, userData);
-    final liquidationForm = await _buildLiquidationFormWidget(data, userData);
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(10),
-        build: (pw.Context context) {
-          return pw.Column(
-            children: [
-              // Request Form - takes half the page
-              pw.Expanded(
-                child: pw.Container(
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.black, width: 1),
-                  ),
-                  padding: const pw.EdgeInsets.all(8),
-                  child: requestForm,
-                ),
-              ),
-              // Small gap
-              pw.SizedBox(height: 10),
-              // Liquidation Form - takes half the page
-              pw.Expanded(
-                child: pw.Container(
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.black, width: 1),
-                  ),
-                  padding: const pw.EdgeInsets.all(8),
-                  child: liquidationForm,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    if (action == 'print') {
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdf.save(),
-      );
-    } else {
-      await Printing.sharePdf(
-        bytes: await pdf.save(),
-        filename: 'Combined_${data['referenceId']}.pdf',
-      );
-    }
-  }
-
-  // Build Request Form Widget
-  Future<pw.Widget> _buildRequestFormWidget(
-    Map<String, dynamic> data,
-    Map<String, dynamic> userData,
-  ) async {
-    final String employeeName =
-        "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}"
-            .toUpperCase();
-    final String userPosition = userData['position'] ?? "";
-    final String userDepartment = userData['department'] ?? "";
-    final String positionDept =
-        "$userPosition${userPosition.isNotEmpty && userDepartment.isNotEmpty ? " / " : ""}$userDepartment";
-
-    final String dateStr = data['createdAt'] != null
-        ? DateFormat(
-            'MMMM dd, yyyy',
-          ).format((data['createdAt'] as Timestamp).toDate())
-        : DateFormat('MMMM dd, yyyy').format(DateTime.now());
-
-    final String refId = data['referenceId'] ?? "N/A";
-    final String reason = data['reason'] ?? "";
-    final String fundSource = data['fundSource'] ?? "H.O Revolving Funds";
-    final String otherFundSource = data['otherFundSource'] ?? "";
-    final String displayFundSource = fundSource == "Other"
-        ? otherFundSource
-        : fundSource;
-
-    List<dynamic> items = data['items'] ?? [];
-    double totalAmount = double.tryParse(data['amount'].toString()) ?? 0;
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            // Title
-            pw.Container(
-              padding: const pw.EdgeInsets.all(6),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.teal700,
-                borderRadius: pw.BorderRadius.circular(4),
-              ),
-              child: pw.Center(
-                child: pw.Text(
-                  "CASH ADVANCE REQUEST",
-                  style: pw.TextStyle(
-                    fontSize: 11,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white,
-                  ),
-                ),
-              ),
-            ),
-            pw.SizedBox(height: 8),
-
-            // Row: Employee and No
-            pw.Row(
-              children: [
-                pw.Expanded(
-                  child: _pdfInfoRow(
-                    "EMPLOYEE:",
-                    employeeName.isEmpty ? "_______________" : employeeName,
-                  ),
-                ),
-                pw.SizedBox(width: 8),
-                pw.Expanded(child: _pdfInfoRow("NO.:", refId)),
-              ],
-            ),
-            pw.SizedBox(height: 6),
-
-            // Row: Position/Dept and Date
-            pw.Row(
-              children: [
-                pw.Expanded(
-                  child: _pdfInfoRow(
-                    "POSITION/DEPT:",
-                    positionDept.isEmpty ? "_______________" : positionDept,
-                  ),
-                ),
-                pw.SizedBox(width: 8),
-                pw.Expanded(child: _pdfInfoRow("DATE:", dateStr)),
-              ],
-            ),
-            pw.SizedBox(height: 6),
-
-            // Fund Source
-            _pdfInfoRow("FUND SOURCE:", displayFundSource),
-            pw.SizedBox(height: 10),
-
-            // Items Table
-            pw.Container(
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.grey),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  // Table Header
-                  pw.Container(
-                    padding: const pw.EdgeInsets.all(6),
-                    decoration: pw.BoxDecoration(color: PdfColors.teal700),
-                    child: pw.Row(
-                      children: [
-                        pw.Expanded(
-                          flex: 3,
-                          child: pw.Text(
-                            "PURPOSE DESCRIPTION",
-                            style: pw.TextStyle(
-                              fontSize: 9,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.white,
-                            ),
-                          ),
-                        ),
-                        pw.Expanded(
-                          flex: 1,
-                          child: pw.Text(
-                            "AMOUNT",
-                            style: pw.TextStyle(
-                              fontSize: 9,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.white,
-                            ),
-                            textAlign: pw.TextAlign.right,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Items Rows
-                  for (var item in items)
-                    pw.Container(
-                      padding: const pw.EdgeInsets.all(6),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border(
-                          bottom: pw.BorderSide(color: PdfColors.grey),
-                        ),
-                      ),
-                      child: pw.Row(
-                        children: [
-                          pw.Expanded(
-                            flex: 3,
-                            child: pw.Text(
-                              item['description'] ?? '',
-                              style: pw.TextStyle(fontSize: 9),
-                            ),
-                          ),
-                          pw.Expanded(
-                            flex: 1,
-                            child: pw.Text(
-                              "P${NumberFormat('#,##0.00').format(item['amount'] ?? 0)}",
-                              style: pw.TextStyle(fontSize: 9),
-                              textAlign: pw.TextAlign.right,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  // Reason Row
-                  if (reason.isNotEmpty)
-                    pw.Container(
-                      padding: const pw.EdgeInsets.all(6),
-                      child: pw.Row(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Expanded(
-                            flex: 3,
-                            child: pw.Text(
-                              reason,
-                              style: pw.TextStyle(fontSize: 9),
-                            ),
-                          ),
-                          pw.Expanded(flex: 1, child: pw.Text("")),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // Total
-            pw.SizedBox(height: 4),
-            pw.Container(
-              padding: const pw.EdgeInsets.all(6),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.grey),
-              ),
-              child: pw.Row(
-                children: [
-                  pw.Expanded(
-                    flex: 3,
-                    child: pw.Text(
-                      "TOTAL:",
-                      style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold,
-                        fontSize: 9,
-                      ),
-                    ),
-                  ),
-                  pw.Expanded(
-                    flex: 1,
-                    child: pw.Text(
-                      "P${NumberFormat('#,##0.00').format(totalAmount)}",
-                      style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold,
-                        fontSize: 9,
-                      ),
-                      textAlign: pw.TextAlign.right,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        pw.Column(
-          children: [
-            pw.SizedBox(height: 12),
-            // Signatures Row
-            pw.Row(
-              children: [
-                pw.Expanded(
-                  child: _pdfSignatureBlock(
-                    "REQUESTED BY:",
-                    "Name & Signature of Employee",
-                  ),
-                ),
-                pw.SizedBox(width: 16),
-                pw.Expanded(
-                  child: _pdfSignatureBlock("CHECKED BY:", "Department Head"),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 8),
-
-            // Released By
-            _pdfSignatureBlock("RELEASED BY:", ""),
-          ],
-        ),
-      ],
-    );
-  }
+  // Quarter page size (1/4 of A4)
+  final quarterPage = PdfPageFormat(297, 421);
+  // Full A4 page for stacked forms
+  final fullPage = PdfPageFormat(595, 842);
 
   // Build Liquidation Form Widget
   Future<pw.Widget> _buildLiquidationFormWidget(
     Map<String, dynamic> data,
-    Map<String, dynamic> userData,
-  ) async {
+    Map<String, dynamic> userData, {
+    bool includeVat = true,
+  }) async {
     final String employeeName =
         "${userData['lastName'] ?? ''}, ${userData['firstName'] ?? ''}"
             .toUpperCase();
@@ -606,7 +302,10 @@ class _HomePageState extends State<HomePage> {
             pw.SizedBox(height: 10),
 
             // Table
-            _buildLiquidationTable(itemsWithVat, totalVatAmount, amount),
+            if (includeVat)
+              _buildLiquidationTable(itemsWithVat, totalVatAmount, amount)
+            else
+              _buildLiquidationTableNoVat(itemsWithVat, amount),
           ],
         ),
         pw.Column(
@@ -650,55 +349,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // PDF Helper for info row
-  pw.Widget _pdfInfoRow(String label, String value) {
-    return pw.Row(
-      children: [
-        pw.SizedBox(
-          width: 85,
-          child: pw.Text(
-            label,
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-          ),
-        ),
-        pw.Expanded(child: pw.Text(value, style: pw.TextStyle(fontSize: 8))),
-      ],
-    );
-  }
-
- // PDF Helper for signature block
-pw.Widget _pdfSignatureBlock(String title, String subtitle) {
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      pw.Text(
-        title,
-        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-      ),
-      pw.SizedBox(height: 8),
-      pw.Container(
-        width: double.infinity,
-        height: 25,
-        child: pw.Center(
-          child: pw.Text(
-            "_________________________",
-            style: pw.TextStyle(fontSize: 8),
-          ),
-        ),
-      ),
-      if (subtitle.isNotEmpty) ...[
-        pw.SizedBox(height: 4),
-        pw.Text(
-          subtitle,
-          style: pw.TextStyle(fontSize: 7, fontStyle: pw.FontStyle.italic),
-          textAlign: pw.TextAlign.center,
-        ),
-      ],
-    ],
-  );
-}
-
-  // Liquidation table
+  // Liquidation table (with VAT)
   pw.Widget _buildLiquidationTable(
     List<Map<String, dynamic>> itemsWithVat,
     double totalVatAmount,
@@ -794,6 +445,135 @@ pw.Widget _pdfSignatureBlock(String title, String subtitle) {
     );
   }
 
+  // Liquidation table (without VAT)
+  pw.Widget _buildLiquidationTableNoVat(
+    List<Map<String, dynamic>> itemsWithVat,
+    double totalAmount,
+  ) {
+    List<pw.TableRow> rows = [];
+
+    rows.add(
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+        children: [
+          _pdfTableCell("Act Code", bold: true),
+          _pdfTableCell("Act Name", bold: true),
+          _pdfTableCell("Debit", bold: true, align: pw.TextAlign.right),
+          _pdfTableCell("Credit", bold: true, align: pw.TextAlign.right),
+        ],
+      ),
+    );
+
+    for (var item in itemsWithVat) {
+      rows.add(
+        pw.TableRow(
+          children: [
+            _pdfTableCell(""),
+            _pdfTableCell(item['description']),
+            _pdfTableCell(
+              "P${NumberFormat('#,##0.00').format(item['grossAmount'])}",
+              align: pw.TextAlign.right,
+            ),
+            _pdfTableCell(""),
+          ],
+        ),
+      );
+    }
+
+    rows.add(
+      pw.TableRow(
+        children: [
+          _pdfTableCell(""),
+          _pdfTableCell(""),
+          _pdfTableCell(""),
+          _pdfTableCell(
+            "P${NumberFormat('#,##0.00').format(totalAmount)}",
+            align: pw.TextAlign.right,
+          ),
+        ],
+      ),
+    );
+
+    rows.add(
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+        children: [
+          _pdfTableCell("TOTAL", bold: true),
+          _pdfTableCell(""),
+          _pdfTableCell(
+            "P${NumberFormat('#,##0.00').format(totalAmount)}",
+            bold: true,
+            align: pw.TextAlign.right,
+          ),
+          _pdfTableCell(
+            "P${NumberFormat('#,##0.00').format(totalAmount)}",
+            bold: true,
+            align: pw.TextAlign.right,
+          ),
+        ],
+      ),
+    );
+
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2),
+        1: const pw.FlexColumnWidth(4),
+        2: const pw.FlexColumnWidth(1.5),
+        3: const pw.FlexColumnWidth(1.5),
+      },
+      children: rows,
+    );
+  }
+
+  // PDF Helper for info row
+  pw.Widget _pdfInfoRow(String label, String value) {
+    return pw.Row(
+      children: [
+        pw.SizedBox(
+          width: 85,
+          child: pw.Text(
+            label,
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+          ),
+        ),
+        pw.Expanded(child: pw.Text(value, style: pw.TextStyle(fontSize: 8))),
+      ],
+    );
+  }
+
+  // PDF Helper for signature block
+  pw.Widget _pdfSignatureBlock(String title, String subtitle) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          title,
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Container(
+          width: double.infinity,
+          height: 25,
+          child: pw.Center(
+            child: pw.Text(
+              "_________________________",
+              style: pw.TextStyle(fontSize: 8),
+            ),
+          ),
+        ),
+        if (subtitle.isNotEmpty) ...[
+          pw.SizedBox(height: 4),
+          pw.Text(
+            subtitle,
+            style: pw.TextStyle(fontSize: 7, fontStyle: pw.FontStyle.italic),
+            textAlign: pw.TextAlign.center,
+          ),
+        ],
+      ],
+    );
+  }
+
   // PDF Table cell
   pw.Widget _pdfTableCell(
     String text, {
@@ -825,19 +605,251 @@ pw.Widget _pdfSignatureBlock(String title, String subtitle) {
         .doc(data['userId'])
         .get();
     final userData = userDoc.data() ?? {};
-    final requestForm = await _buildRequestFormWidget(data, userData);
+    final String employeeName =
+        "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}"
+            .toUpperCase();
+    final String userPosition = userData['position'] ?? "";
+    final String userDepartment = userData['department'] ?? "";
+    final String positionDept =
+        "$userPosition${userPosition.isNotEmpty && userDepartment.isNotEmpty ? " / " : ""}$userDepartment";
+
+    final String dateStr = data['createdAt'] != null
+        ? DateFormat(
+            'MMMM dd, yyyy',
+          ).format((data['createdAt'] as Timestamp).toDate())
+        : DateFormat('MMMM dd, yyyy').format(DateTime.now());
+
+    final String refId = data['referenceId'] ?? "N/A";
+    final String reason = data['reason'] ?? "";
+    final String fundSource = data['fundSource'] ?? "H.O Revolving Funds";
+    final String otherFundSource = data['otherFundSource'] ?? "";
+    final String displayFundSource = fundSource == "Other"
+        ? otherFundSource
+        : fundSource;
+
+    List<dynamic> items = data['items'] ?? [];
+    double totalAmount = double.tryParse(data['amount'].toString()) ?? 0;
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(20),
-        build: (pw.Context context) => pw.Container(
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.black, width: 1),
-          ),
-          padding: const pw.EdgeInsets.all(8),
-          child: requestForm,
-        ),
+        pageFormat: quarterPage,
+        build: (pw.Context context) {
+          return pw.Container(
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.black, width: 1),
+            ),
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Title
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(4),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.teal700,
+                    borderRadius: pw.BorderRadius.circular(4),
+                  ),
+                  child: pw.Center(
+                    child: pw.Text(
+                      "CASH ADVANCE REQUEST",
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                pw.SizedBox(height: 6),
+
+                // Row: Employee and No
+                pw.Row(
+                  children: [
+                    pw.Expanded(
+                      child: _pdfInfoRow(
+                        "EMPLOYEE:",
+                        employeeName.isEmpty ? "_______________" : employeeName,
+                      ),
+                    ),
+                    pw.SizedBox(width: 4),
+                    pw.Expanded(child: _pdfInfoRow("NO.:", refId)),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+
+                // Row: Position/Dept and Date
+                pw.Row(
+                  children: [
+                    pw.Expanded(
+                      child: _pdfInfoRow(
+                        "POSITION/DEPT:",
+                        positionDept.isEmpty ? "_______________" : positionDept,
+                      ),
+                    ),
+                    pw.SizedBox(width: 4),
+                    pw.Expanded(child: _pdfInfoRow("DATE:", dateStr)),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+
+                // Fund Source
+                _pdfInfoRow("FUND SOURCE:", displayFundSource),
+                pw.SizedBox(height: 6),
+
+                // Items Table
+                pw.Container(
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      // Table Header
+                      pw.Container(
+                        padding: const pw.EdgeInsets.all(4),
+                        decoration: pw.BoxDecoration(color: PdfColors.teal700),
+                        child: pw.Row(
+                          children: [
+                            pw.Expanded(
+                              flex: 3,
+                              child: pw.Text(
+                                "PURPOSE DESCRIPTION",
+                                style: pw.TextStyle(
+                                  fontSize: 7,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: PdfColors.white,
+                                ),
+                              ),
+                            ),
+                            pw.Expanded(
+                              flex: 1,
+                              child: pw.Text(
+                                "AMOUNT",
+                                style: pw.TextStyle(
+                                  fontSize: 7,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: PdfColors.white,
+                                ),
+                                textAlign: pw.TextAlign.right,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Items Rows
+                      for (var item in items)
+                        pw.Container(
+                          padding: const pw.EdgeInsets.all(4),
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border(
+                              bottom: pw.BorderSide(color: PdfColors.grey),
+                            ),
+                          ),
+                          child: pw.Row(
+                            children: [
+                              pw.Expanded(
+                                flex: 3,
+                                child: pw.Text(
+                                  item['description'] ?? '',
+                                  style: pw.TextStyle(fontSize: 7),
+                                ),
+                              ),
+                              pw.Expanded(
+                                flex: 1,
+                                child: pw.Text(
+                                  "P${NumberFormat('#,##0.00').format(item['amount'] ?? 0)}",
+                                  style: pw.TextStyle(fontSize: 7),
+                                  textAlign: pw.TextAlign.right,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Reason Row
+                      if (reason.isNotEmpty)
+                        pw.Container(
+                          padding: const pw.EdgeInsets.all(4),
+                          child: pw.Row(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Expanded(
+                                flex: 3,
+                                child: pw.Text(
+                                  reason,
+                                  style: pw.TextStyle(fontSize: 7),
+                                ),
+                              ),
+                              pw.Expanded(flex: 1, child: pw.Text("")),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Total
+                pw.SizedBox(height: 2),
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(4),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey),
+                  ),
+                  child: pw.Row(
+                    children: [
+                      pw.Expanded(
+                        flex: 3,
+                        child: pw.Text(
+                          "TOTAL:",
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 7,
+                          ),
+                        ),
+                      ),
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Text(
+                          "P${NumberFormat('#,##0.00').format(totalAmount)}",
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 7,
+                          ),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 8),
+
+                // Signatures Row
+                pw.Row(
+                  children: [
+                    pw.Expanded(
+                      child: _pdfSignatureBlock(
+                        "REQUESTED BY:",
+                        "Name & Signature of Employee",
+                      ),
+                    ),
+                    pw.SizedBox(width: 8),
+                    pw.Expanded(
+                      child: _pdfSignatureBlock(
+                        "CHECKED BY:",
+                        "Department Head",
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 6),
+
+                // Released By
+                _pdfSignatureBlock("RELEASED BY:", ""),
+              ],
+            ),
+          );
+        },
       ),
     );
 
@@ -849,6 +861,77 @@ pw.Widget _pdfSignatureBlock(String title, String subtitle) {
       await Printing.sharePdf(
         bytes: await pdf.save(),
         filename: 'RequestForm_${data['referenceId']}.pdf',
+      );
+    }
+  }
+
+  // Combined PDF with both liquidation forms (with VAT and without VAT) stacked vertically
+  Future<void> _generateCombinedLiquidationPDF(
+    Map<String, dynamic> data, {
+    String action = 'print',
+  }) async {
+    final pdf = pw.Document();
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(data['userId'])
+        .get();
+    final userData = userDoc.data() ?? {};
+
+    final liquidationWithVat = await _buildLiquidationFormWidget(
+      data,
+      userData,
+      includeVat: true,
+    );
+    final liquidationWithoutVat = await _buildLiquidationFormWidget(
+      data,
+      userData,
+      includeVat: false,
+    );
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: fullPage,
+        margin: const pw.EdgeInsets.all(10),
+        build: (pw.Context context) {
+          return pw.Column(
+            children: [
+              // With VAT form - takes half the page
+              pw.Expanded(
+                child: pw.Container(
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.black, width: 1),
+                  ),
+                  padding: const pw.EdgeInsets.all(8),
+                  child: liquidationWithVat,
+                ),
+              ),
+              // Small gap
+              pw.SizedBox(height: 10),
+              // Without VAT form - takes half the page
+              pw.Expanded(
+                child: pw.Container(
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.black, width: 1),
+                  ),
+                  padding: const pw.EdgeInsets.all(8),
+                  child: liquidationWithoutVat,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (action == 'print') {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
+    } else {
+      await Printing.sharePdf(
+        bytes: await pdf.save(),
+        filename: 'LiquidationForms_${data['referenceId']}.pdf',
       );
     }
   }
@@ -1821,22 +1904,22 @@ pw.Widget _pdfSignatureBlock(String title, String subtitle) {
                 ),
               ),
               const SizedBox(width: 4),
-              if (status == 'Pending' || status == 'Rejected') ...[
-                IconButton(
-                  tooltip: 'Download Request Form',
-                  icon: const Icon(
-                    Icons.description_outlined,
-                    color: Colors.purple,
-                    size: 20,
-                  ),
-                  onPressed: () =>
-                      _generateRequestPDF(data, action: 'download'),
+              // Request Form button - always available
+              IconButton(
+                tooltip: 'Download Request Form',
+                icon: const Icon(
+                  Icons.description_outlined,
+                  color: Colors.purple,
+                  size: 20,
                 ),
-                IconButton(
-                  tooltip: 'Print Request Form',
-                  icon: const Icon(Icons.print, color: Colors.purple, size: 20),
-                  onPressed: () => _generateRequestPDF(data, action: 'print'),
-                ),
+                onPressed: () => _generateRequestPDF(data, action: 'download'),
+              ),
+              IconButton(
+                tooltip: 'Print Request Form',
+                icon: const Icon(Icons.print, color: Colors.purple, size: 20),
+                onPressed: () => _generateRequestPDF(data, action: 'print'),
+              ),
+              if (status == 'Pending' || status == 'Rejected')
                 IconButton(
                   tooltip: status == 'Rejected'
                       ? 'Resubmit as New'
@@ -1852,22 +1935,24 @@ pw.Widget _pdfSignatureBlock(String title, String subtitle) {
                     existingData: data,
                   ),
                 ),
-              ],
+              // Combined Liquidation Forms button - only when approved
               if (status == 'Approved') ...[
                 IconButton(
-                  tooltip: 'Download Combined Form (Request + Liquidation)',
+                  tooltip:
+                      'Download Combined Liquidation Forms (With/Without VAT)',
                   icon: const Icon(
                     Icons.picture_as_pdf,
                     color: Colors.red,
                     size: 20,
                   ),
                   onPressed: () =>
-                      _generateCombinedPDF(data, action: 'download'),
+                      _generateCombinedLiquidationPDF(data, action: 'download'),
                 ),
                 IconButton(
-                  tooltip: 'Print Combined Form',
+                  tooltip: 'Print Combined Liquidation Forms',
                   icon: const Icon(Icons.print, color: Colors.red, size: 20),
-                  onPressed: () => _generateCombinedPDF(data, action: 'print'),
+                  onPressed: () =>
+                      _generateCombinedLiquidationPDF(data, action: 'print'),
                 ),
               ],
             ],
