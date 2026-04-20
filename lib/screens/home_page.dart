@@ -408,8 +408,8 @@ class _HomePageState extends State<HomePage> {
                           pw.Expanded(
                             flex: 3,
                             child: pw.Text(
-                              reason,
-                              style: pw.TextStyle(fontSize: 9),
+                              "Reason: $reason",
+                              style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic),
                             ),
                           ),
                           pw.Expanded(flex: 1, child: pw.Text("")),
@@ -1767,6 +1767,8 @@ class _HomePageState extends State<HomePage> {
 
     String purposeDisplay = '';
     List<dynamic> items = data['items'] ?? [];
+    String? reason = data['reason'];
+    
     if (items.isNotEmpty) {
       int itemCount = items.length;
       purposeDisplay = "$itemCount item(s)";
@@ -1813,6 +1815,33 @@ class _HomePageState extends State<HomePage> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 12),
               ),
+              // Show reason if it exists
+              if (reason != null && reason.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.note_outlined,
+                        size: 12,
+                        color: Colors.grey[500],
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          "Reason: $reason",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Text(
                 data['createdAt'] != null
                     ? DateFormat(
@@ -1842,7 +1871,34 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(width: 4),
-              if (status == 'Pending' || status == 'Rejected') ...[
+              // PENDING: Show View and Edit buttons (NO download/print)
+              if (status == 'Pending') ...[
+                IconButton(
+                  tooltip: 'View Details',
+                  icon: const Icon(
+                    Icons.visibility,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
+                  onPressed: () => _showTransactionDetails(data),
+                ),
+                IconButton(
+                  tooltip: 'Edit Application',
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    color: Colors.orange,
+                    size: 20,
+                  ),
+                  onPressed: () => _showApplyPopup(
+                    context,
+                    data['userId'],
+                    existingData: data,
+                    editDocId: docId,
+                  ),
+                ),
+              ],
+              // REJECTED: Show download, print, and resubmit
+              if (status == 'Rejected') ...[
                 IconButton(
                   tooltip: 'Download Request Form',
                   icon: const Icon(
@@ -1859,11 +1915,9 @@ class _HomePageState extends State<HomePage> {
                   onPressed: () => _generateRequestPDF(data, action: 'print'),
                 ),
                 IconButton(
-                  tooltip: status == 'Rejected'
-                      ? 'Resubmit as New'
-                      : 'Edit Application',
-                  icon: Icon(
-                    status == 'Rejected' ? Icons.refresh : Icons.edit_outlined,
+                  tooltip: 'Resubmit as New',
+                  icon: const Icon(
+                    Icons.refresh,
                     color: Colors.blue,
                     size: 20,
                   ),
@@ -1874,6 +1928,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ],
+              // APPROVED: Show download and print for combined forms
               if (status == 'Approved') ...[
                 IconButton(
                   tooltip: 'Download Combined Form (Request + Liquidation)',
@@ -2731,16 +2786,30 @@ class _HomePageState extends State<HomePage> {
       'fundSource': fundSource ?? "H.O Revolving Funds",
       if (otherFundSource != null && otherFundSource.isNotEmpty)
         'otherFundSource': otherFundSource,
-      'includeVat': includeVat, // Store VAT preference
+      'includeVat': includeVat,
     };
 
     try {
-      if (editDocId == null || existingStatus == 'Rejected') {
+      // If editDocId is provided AND the request is NOT rejected, UPDATE existing
+      if (editDocId != null && existingStatus != 'Rejected') {
+        // Keep the same reference ID
+        data['referenceId'] = existingRefId ?? _generateCleanRefId();
+        await FirebaseFirestore.instance
+            .collection('advances')
+            .doc(editDocId)
+            .update(data);
+        
+        if (context.mounted) {
+          Navigator.pop(context);
+          _showToast("Request updated successfully!", isError: false);
+        }
+      } else {
+        // Create NEW request (either new submission or resubmit from rejected)
         data['createdAt'] = FieldValue.serverTimestamp();
         data['referenceId'] = _generateCleanRefId();
 
-        if (existingStatus == 'Rejected') {
-          data['resubmittedFrom'] = editDocId!;
+        if (existingStatus == 'Rejected' && editDocId != null) {
+          data['resubmittedFrom'] = editDocId;
         }
 
         await FirebaseFirestore.instance.collection('advances').add(data);
@@ -2753,17 +2822,6 @@ class _HomePageState extends State<HomePage> {
         if (context.mounted) {
           Navigator.pop(context);
           _showToast("Request submitted successfully!", isError: false);
-        }
-      } else {
-        data['referenceId'] = existingRefId ?? _generateCleanRefId();
-        await FirebaseFirestore.instance
-            .collection('advances')
-            .doc(editDocId)
-            .update(data);
-
-        if (context.mounted) {
-          Navigator.pop(context);
-          _showToast("Request updated successfully!", isError: false);
         }
       }
     } catch (e) {
