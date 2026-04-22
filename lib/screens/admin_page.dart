@@ -80,6 +80,46 @@ class _AdminPageState extends State<AdminPage> {
     return number.toString();
   }
 
+  // Individual Request Form PDF
+  Future<void> _generateRequestPDF(
+    Map<String, dynamic> data, {
+    String action = 'print',
+  }) async {
+    final pdf = pw.Document();
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(data['userId'])
+        .get();
+    final userData = userDoc.data() ?? {};
+    final requestForm = await _buildRequestFormWidget(data, userData);
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) => pw.Container(
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.black, width: 1),
+          ),
+          padding: const pw.EdgeInsets.all(8),
+          child: requestForm,
+        ),
+      ),
+    );
+
+    if (action == 'print') {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
+    } else {
+      await Printing.sharePdf(
+        bytes: await pdf.save(),
+        filename: 'RequestForm_${data['referenceId']}.pdf',
+      );
+    }
+  }
+
   // Combined PDF (Request + Liquidation stacked vertically on ONE page)
   Future<void> _generateCombinedPDF(
     Map<String, dynamic> data, {
@@ -1613,6 +1653,23 @@ class _AdminPageState extends State<AdminPage> {
             ),
             Row(
               children: [
+                // Request Form buttons - always available for all statuses
+                IconButton(
+                  tooltip: 'Download Request Form',
+                  icon: const Icon(
+                    Icons.description_outlined,
+                    color: Colors.purple,
+                    size: 24,
+                  ),
+                  onPressed: () =>
+                      _generateRequestPDF(data, action: 'download'),
+                ),
+                IconButton(
+                  tooltip: 'Print Request Form',
+                  icon: const Icon(Icons.print, color: Colors.purple, size: 24),
+                  onPressed: () => _generateRequestPDF(data, action: 'print'),
+                ),
+
                 if (status == "Pending") ...[
                   IconButton(
                     icon: const Icon(

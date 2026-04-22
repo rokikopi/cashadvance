@@ -409,7 +409,10 @@ class _HomePageState extends State<HomePage> {
                             flex: 3,
                             child: pw.Text(
                               "Reason: $reason",
-                              style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic),
+                              style: pw.TextStyle(
+                                fontSize: 9,
+                                fontStyle: pw.FontStyle.italic,
+                              ),
                             ),
                           ),
                           pw.Expanded(flex: 1, child: pw.Text("")),
@@ -1768,7 +1771,7 @@ class _HomePageState extends State<HomePage> {
     String purposeDisplay = '';
     List<dynamic> items = data['items'] ?? [];
     String? reason = data['reason'];
-    
+
     if (items.isNotEmpty) {
       int itemCount = items.length;
       purposeDisplay = "$itemCount item(s)";
@@ -1871,16 +1874,23 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(width: 4),
-              // PENDING: Show View and Edit buttons (NO download/print)
+
+              // PENDING: Show Request Form buttons (download/print) and Edit button
               if (status == 'Pending') ...[
                 IconButton(
-                  tooltip: 'View Details',
+                  tooltip: 'Download Request Form',
                   icon: const Icon(
-                    Icons.visibility,
-                    color: Colors.blue,
+                    Icons.description_outlined,
+                    color: Colors.purple,
                     size: 20,
                   ),
-                  onPressed: () => _showTransactionDetails(data),
+                  onPressed: () =>
+                      _generateRequestPDF(data, action: 'download'),
+                ),
+                IconButton(
+                  tooltip: 'Print Request Form',
+                  icon: const Icon(Icons.print, color: Colors.purple, size: 20),
+                  onPressed: () => _generateRequestPDF(data, action: 'print'),
                 ),
                 IconButton(
                   tooltip: 'Edit Application',
@@ -1897,7 +1907,8 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ],
-              // REJECTED: Show download, print, and resubmit
+
+              // REJECTED: Show Request Form buttons (download/print) and Resubmit button
               if (status == 'Rejected') ...[
                 IconButton(
                   tooltip: 'Download Request Form',
@@ -1916,11 +1927,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 IconButton(
                   tooltip: 'Resubmit as New',
-                  icon: const Icon(
-                    Icons.refresh,
-                    color: Colors.blue,
-                    size: 20,
-                  ),
+                  icon: const Icon(Icons.refresh, color: Colors.blue, size: 20),
                   onPressed: () => _showApplyPopup(
                     context,
                     data['userId'],
@@ -1928,8 +1935,24 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ],
-              // APPROVED: Show download and print for combined forms
+
+              // APPROVED: Show Request Form buttons (download/print) AND Combined Form buttons
               if (status == 'Approved') ...[
+                IconButton(
+                  tooltip: 'Download Request Form',
+                  icon: const Icon(
+                    Icons.description_outlined,
+                    color: Colors.purple,
+                    size: 20,
+                  ),
+                  onPressed: () =>
+                      _generateRequestPDF(data, action: 'download'),
+                ),
+                IconButton(
+                  tooltip: 'Print Request Form',
+                  icon: const Icon(Icons.print, color: Colors.purple, size: 20),
+                  onPressed: () => _generateRequestPDF(data, action: 'print'),
+                ),
                 IconButton(
                   tooltip: 'Download Combined Form (Request + Liquidation)',
                   icon: const Icon(
@@ -2798,7 +2821,7 @@ class _HomePageState extends State<HomePage> {
             .collection('advances')
             .doc(editDocId)
             .update(data);
-        
+
         if (context.mounted) {
           Navigator.pop(context);
           _showToast("Request updated successfully!", isError: false);
