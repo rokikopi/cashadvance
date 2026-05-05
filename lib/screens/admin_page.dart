@@ -80,8 +80,8 @@ class _AdminPageState extends State<AdminPage> {
     return number.toString();
   }
 
-  // Combined PDF with both liquidation forms (with VAT and without VAT) stacked vertically
-  Future<void> _generateCombinedLiquidationPDF(
+  // Print Liquidation Form with VAT
+  Future<void> _printLiquidationWithVatPDF(
     Map<String, dynamic> data, {
     String action = 'print',
   }) async {
@@ -92,34 +92,17 @@ class _AdminPageState extends State<AdminPage> {
         .doc(data['userId'])
         .get();
     final userData = userDoc.data() ?? {};
-
-    final liquidationWithVat = await _buildLiquidationFormWidget(
+    final liquidationForm = await _buildLiquidationFormWidget(
       data,
       userData,
       includeVat: true,
-    );
-    final liquidationWithoutVat = await _buildLiquidationFormWidget(
-      data,
-      userData,
-      includeVat: false,
     );
 
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(10),
-        build: (pw.Context context) {
-          return pw.Column(
-            children: [
-              // With VAT form - takes half the page
-              pw.Expanded(child: liquidationWithVat),
-              // Small gap
-              pw.SizedBox(height: 10),
-              // Without VAT form - takes half the page
-              pw.Expanded(child: liquidationWithoutVat),
-            ],
-          );
-        },
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) => liquidationForm,
       ),
     );
 
@@ -130,7 +113,45 @@ class _AdminPageState extends State<AdminPage> {
     } else {
       await Printing.sharePdf(
         bytes: await pdf.save(),
-        filename: 'LiquidationForms_${data['referenceId']}.pdf',
+        filename: 'LiquidationForm_WithVAT_${data['referenceId']}.pdf',
+      );
+    }
+  }
+
+  // Print Liquidation Form without VAT
+  Future<void> _printLiquidationWithoutVatPDF(
+    Map<String, dynamic> data, {
+    String action = 'print',
+  }) async {
+    final pdf = pw.Document();
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(data['userId'])
+        .get();
+    final userData = userDoc.data() ?? {};
+    final liquidationForm = await _buildLiquidationFormWidget(
+      data,
+      userData,
+      includeVat: false,
+    );
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) => liquidationForm,
+      ),
+    );
+
+    if (action == 'print') {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
+    } else {
+      await Printing.sharePdf(
+        bytes: await pdf.save(),
+        filename: 'LiquidationForm_WithoutVAT_${data['referenceId']}.pdf',
       );
     }
   }
@@ -722,8 +743,8 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  // Individual Request Form PDF
-  Future<void> _generateRequestPDF(
+  // Print Request Form PDF
+  Future<void> _printRequestPDF(
     Map<String, dynamic> data, {
     String action = 'print',
   }) async {
@@ -740,13 +761,7 @@ class _AdminPageState extends State<AdminPage> {
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(20),
-        build: (pw.Context context) => pw.Container(
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.black, width: 1),
-          ),
-          padding: const pw.EdgeInsets.all(12),
-          child: requestForm,
-        ),
+        build: (pw.Context context) => requestForm,
       ),
     );
 
@@ -1612,21 +1627,11 @@ class _AdminPageState extends State<AdminPage> {
             ),
             Row(
               children: [
-                // Request Form buttons - always available for all statuses
-                IconButton(
-                  tooltip: 'Download Request Form',
-                  icon: const Icon(
-                    Icons.description_outlined,
-                    color: Colors.purple,
-                    size: 24,
-                  ),
-                  onPressed: () =>
-                      _generateRequestPDF(data, action: 'download'),
-                ),
+                // Print Request Form button - always available for all statuses
                 IconButton(
                   tooltip: 'Print Request Form',
                   icon: const Icon(Icons.print, color: Colors.purple, size: 24),
-                  onPressed: () => _generateRequestPDF(data, action: 'print'),
+                  onPressed: () => _printRequestPDF(data, action: 'print'),
                 ),
 
                 if (status == "Pending") ...[
@@ -1650,22 +1655,20 @@ class _AdminPageState extends State<AdminPage> {
                   ),
                 ] else if (status == "Approved") ...[
                   IconButton(
-                    tooltip: 'Download Combined Liquidation Forms',
-                    icon: const Icon(
-                      Icons.picture_as_pdf,
-                      color: Colors.red,
-                      size: 24,
-                    ),
-                    onPressed: () => _generateCombinedLiquidationPDF(
-                      data,
-                      action: 'download',
-                    ),
+                    tooltip: 'Print Liquidation Form (With VAT)',
+                    icon: const Icon(Icons.print, color: Colors.blue, size: 24),
+                    onPressed: () =>
+                        _printLiquidationWithVatPDF(data, action: 'print'),
                   ),
                   IconButton(
-                    tooltip: 'Print Combined Liquidation Forms',
-                    icon: const Icon(Icons.print, color: Colors.red, size: 24),
+                    tooltip: 'Print Liquidation Form (Without VAT)',
+                    icon: const Icon(
+                      Icons.print,
+                      color: Colors.green,
+                      size: 24,
+                    ),
                     onPressed: () =>
-                        _generateCombinedLiquidationPDF(data, action: 'print'),
+                        _printLiquidationWithoutVatPDF(data, action: 'print'),
                   ),
                   Icon(Icons.verified, color: Colors.green, size: 24),
                 ] else

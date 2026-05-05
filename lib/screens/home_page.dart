@@ -173,13 +173,11 @@ class _HomePageState extends State<HomePage> {
     return number.toString();
   }
 
-  // Half page size (full width of A4, half height)
-  final halfPage = PdfPageFormat(595, 421);
-  // Full A4 page for stacked forms
+  // Full A4 page for forms
   final fullPage = PdfPageFormat(595, 842);
 
-  // Combined PDF with both liquidation forms (with VAT and without VAT) stacked vertically
-  Future<void> _generateCombinedLiquidationPDF(
+  // Print Liquidation Form with VAT
+  Future<void> _printLiquidationWithVatPDF(
     Map<String, dynamic> data, {
     String action = 'print',
   }) async {
@@ -190,34 +188,18 @@ class _HomePageState extends State<HomePage> {
         .doc(data['userId'])
         .get();
     final userData = userDoc.data() ?? {};
-
-    final liquidationWithVat = await _buildLiquidationFormWidget(
+    final liquidationForm = await _buildLiquidationFormWidget(
       data,
       userData,
       includeVat: true,
-    );
-    final liquidationWithoutVat = await _buildLiquidationFormWidget(
-      data,
-      userData,
-      includeVat: false,
     );
 
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(10),
-        build: (pw.Context context) {
-          return pw.Column(
-            children: [
-              // With VAT form - takes half the page (no border here, border is inside the widget)
-              pw.Expanded(child: liquidationWithVat),
-              // Small gap
-              pw.SizedBox(height: 10),
-              // Without VAT form - takes half the page (no border here, border is inside the widget)
-              pw.Expanded(child: liquidationWithoutVat),
-            ],
-          );
-        },
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) =>
+            liquidationForm, // Removed the outer container with border
       ),
     );
 
@@ -228,7 +210,46 @@ class _HomePageState extends State<HomePage> {
     } else {
       await Printing.sharePdf(
         bytes: await pdf.save(),
-        filename: 'LiquidationForms_${data['referenceId']}.pdf',
+        filename: 'LiquidationForm_WithVAT_${data['referenceId']}.pdf',
+      );
+    }
+  }
+
+  // Print Liquidation Form without VAT
+  Future<void> _printLiquidationWithoutVatPDF(
+    Map<String, dynamic> data, {
+    String action = 'print',
+  }) async {
+    final pdf = pw.Document();
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(data['userId'])
+        .get();
+    final userData = userDoc.data() ?? {};
+    final liquidationForm = await _buildLiquidationFormWidget(
+      data,
+      userData,
+      includeVat: false,
+    );
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) =>
+            liquidationForm, // Removed the outer container with border
+      ),
+    );
+
+    if (action == 'print') {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
+    } else {
+      await Printing.sharePdf(
+        bytes: await pdf.save(),
+        filename: 'LiquidationForm_WithoutVAT_${data['referenceId']}.pdf',
       );
     }
   }
@@ -476,7 +497,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Build Liquidation Form Widget (takes half page)
+  // Build Liquidation Form Widget
   Future<pw.Widget> _buildLiquidationFormWidget(
     Map<String, dynamic> data,
     Map<String, dynamic> userData, {
@@ -535,127 +556,119 @@ class _HomePageState extends State<HomePage> {
       padding: const pw.EdgeInsets.all(8),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
+          // Header
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              // Header
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    fundType,
-                    style: pw.TextStyle(
-                      fontSize: 7,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.Text("Ref: $refId", style: pw.TextStyle(fontSize: 6)),
-                ],
+              pw.Text(
+                fundType,
+                style: pw.TextStyle(
+                  fontSize: 7,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
-              pw.SizedBox(height: 4),
+              pw.Text("Ref: $refId", style: pw.TextStyle(fontSize: 6)),
+            ],
+          ),
+          pw.SizedBox(height: 4),
 
-              // Pay to
-              _pdfInfoRow("Pay to", employeeName),
-              if (userPosition.isNotEmpty)
-                _pdfInfoRow("Position", userPosition),
-              if (userDepartment.isNotEmpty)
-                _pdfInfoRow("Department", userDepartment),
-              pw.SizedBox(height: 3),
+          // Pay to
+          _pdfInfoRow("Pay to", employeeName),
+          if (userPosition.isNotEmpty) _pdfInfoRow("Position", userPosition),
+          if (userDepartment.isNotEmpty)
+            _pdfInfoRow("Department", userDepartment),
+          pw.SizedBox(height: 3),
 
-              // Particulars (Purpose/Reason)
-              if (reason.isNotEmpty) _pdfInfoRow("Particulars:", reason),
-              pw.SizedBox(height: 3),
+          // Particulars (Purpose/Reason)
+          if (reason.isNotEmpty) _pdfInfoRow("Particulars:", reason),
+          pw.SizedBox(height: 3),
 
-              // Items list (without amounts)
-              if (items.isNotEmpty) ...[
-                _pdfInfoRow("Items", ""),
-                for (var item in items)
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.only(left: 12),
-                    child: pw.Text(
-                      "• ${item['description']}",
-                      style: pw.TextStyle(fontSize: 6),
-                    ),
-                  ),
-              ],
-              pw.SizedBox(height: 3),
-
-              // Amount in Words and Total
-              _pdfInfoRow("Amt in Words", amountInWords),
-              _pdfInfoRow(
-                "Total Amount",
-                "P${NumberFormat('#,##0.00').format(amount)}",
+          // Items list (without amounts)
+          if (items.isNotEmpty) ...[
+            _pdfInfoRow("Items", ""),
+            for (var item in items)
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(left: 12),
+                child: pw.Text(
+                  "• ${item['description']}",
+                  style: pw.TextStyle(fontSize: 6),
+                ),
               ),
-              pw.SizedBox(height: 4),
+          ],
+          pw.SizedBox(height: 3),
 
-              // No. and Date
-              pw.Row(
-                children: [
-                  pw.Text(
-                    "No. : ",
-                    style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 6,
-                    ),
-                  ),
-                  pw.Text(refId, style: pw.TextStyle(fontSize: 6)),
-                  pw.SizedBox(width: 8),
-                  pw.Text(
-                    "Date : ",
-                    style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 6,
-                    ),
-                  ),
-                  pw.Text(dateStr, style: pw.TextStyle(fontSize: 6)),
-                ],
+          // Amount in Words and Total
+          _pdfInfoRow("Amt in Words", amountInWords),
+          _pdfInfoRow(
+            "Total Amount",
+            "P${NumberFormat('#,##0.00').format(amount)}",
+          ),
+          pw.SizedBox(height: 4),
+
+          // No. and Date
+          pw.Row(
+            children: [
+              pw.Text(
+                "No. : ",
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 6,
+                ),
               ),
-              pw.SizedBox(height: 6),
+              pw.Text(refId, style: pw.TextStyle(fontSize: 6)),
+              pw.SizedBox(width: 8),
+              pw.Text(
+                "Date : ",
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 6,
+                ),
+              ),
+              pw.Text(dateStr, style: pw.TextStyle(fontSize: 6)),
+            ],
+          ),
+          pw.SizedBox(height: 6),
 
-              // Table
-              _buildLiquidationTable(
-                itemsWithVat,
-                totalVatAmount,
-                amount,
-                includeVat,
+          // Table
+          _buildLiquidationTable(
+            itemsWithVat,
+            totalVatAmount,
+            amount,
+            includeVat,
+          ),
+
+          pw.SizedBox(height: 12),
+
+          // Signatures
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Expanded(
+                child: _pdfSignatureBlock(
+                  "PREPARED BY:",
+                  "$employeeName\n${userPosition.isNotEmpty ? userPosition : "EMPLOYEE"}",
+                ),
+              ),
+              pw.SizedBox(width: 8),
+              pw.Expanded(
+                child: _pdfSignatureBlock(
+                  "CHECKED BY:",
+                  "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
+                ),
               ),
             ],
           ),
-          pw.Column(
+          pw.SizedBox(height: 8),
+
+          // Approved By - centered
+          pw.Row(
             children: [
-              pw.SizedBox(height: 8),
-              // Signatures
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Expanded(
-                    child: _pdfSignatureBlock(
-                      "PREPARED BY:",
-                      "$employeeName\n${userPosition.isNotEmpty ? userPosition : "EMPLOYEE"}",
-                    ),
-                  ),
-                  pw.SizedBox(width: 8),
-                  pw.Expanded(
-                    child: _pdfSignatureBlock(
-                      "CHECKED BY:",
-                      "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 6),
-              // Approved By - centered
-              pw.Row(
-                children: [
-                  pw.Expanded(
-                    child: _pdfSignatureBlock(
-                      "APPROVED BY:",
-                      "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
-                    ),
-                  ),
-                ],
+              pw.Expanded(
+                child: _pdfSignatureBlock(
+                  "APPROVED BY:",
+                  "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
+                ),
               ),
             ],
           ),
@@ -828,8 +841,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Individual Request Form PDF
-  Future<void> _generateRequestPDF(
+  // Print Request Form PDF
+  Future<void> _printRequestPDF(
     Map<String, dynamic> data, {
     String action = 'print',
   }) async {
@@ -1865,22 +1878,12 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 4),
 
-              // PENDING: Show Request Form buttons and Edit button
+              // PENDING: Show Print Request Form button and Edit button
               if (status == 'Pending') ...[
-                IconButton(
-                  tooltip: 'Download Request Form',
-                  icon: const Icon(
-                    Icons.description_outlined,
-                    color: Colors.purple,
-                    size: 20,
-                  ),
-                  onPressed: () =>
-                      _generateRequestPDF(data, action: 'download'),
-                ),
                 IconButton(
                   tooltip: 'Print Request Form',
                   icon: const Icon(Icons.print, color: Colors.purple, size: 20),
-                  onPressed: () => _generateRequestPDF(data, action: 'print'),
+                  onPressed: () => _printRequestPDF(data, action: 'print'),
                 ),
                 IconButton(
                   tooltip: 'Edit Application',
@@ -1898,22 +1901,12 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
 
-              // REJECTED: Show Request Form buttons and Resubmit button
+              // REJECTED: Show Print Request Form button and Resubmit button
               if (status == 'Rejected') ...[
-                IconButton(
-                  tooltip: 'Download Request Form',
-                  icon: const Icon(
-                    Icons.description_outlined,
-                    color: Colors.purple,
-                    size: 20,
-                  ),
-                  onPressed: () =>
-                      _generateRequestPDF(data, action: 'download'),
-                ),
                 IconButton(
                   tooltip: 'Print Request Form',
                   icon: const Icon(Icons.print, color: Colors.purple, size: 20),
-                  onPressed: () => _generateRequestPDF(data, action: 'print'),
+                  onPressed: () => _printRequestPDF(data, action: 'print'),
                 ),
                 IconButton(
                   tooltip: 'Resubmit as New',
@@ -1926,39 +1919,24 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
 
-              // APPROVED: Show Request Form buttons AND Combined Liquidation Forms buttons
+              // APPROVED: Show Print Request Form button AND Print Liquidation Form buttons
               if (status == 'Approved') ...[
-                IconButton(
-                  tooltip: 'Download Request Form',
-                  icon: const Icon(
-                    Icons.description_outlined,
-                    color: Colors.purple,
-                    size: 20,
-                  ),
-                  onPressed: () =>
-                      _generateRequestPDF(data, action: 'download'),
-                ),
                 IconButton(
                   tooltip: 'Print Request Form',
                   icon: const Icon(Icons.print, color: Colors.purple, size: 20),
-                  onPressed: () => _generateRequestPDF(data, action: 'print'),
+                  onPressed: () => _printRequestPDF(data, action: 'print'),
                 ),
                 IconButton(
-                  tooltip:
-                      'Download Combined Liquidation Forms (With/Without VAT)',
-                  icon: const Icon(
-                    Icons.picture_as_pdf,
-                    color: Colors.red,
-                    size: 20,
-                  ),
+                  tooltip: 'Print Liquidation Form (With VAT)',
+                  icon: const Icon(Icons.print, color: Colors.blue, size: 20),
                   onPressed: () =>
-                      _generateCombinedLiquidationPDF(data, action: 'download'),
+                      _printLiquidationWithVatPDF(data, action: 'print'),
                 ),
                 IconButton(
-                  tooltip: 'Print Combined Liquidation Forms',
-                  icon: const Icon(Icons.print, color: Colors.red, size: 20),
+                  tooltip: 'Print Liquidation Form (Without VAT)',
+                  icon: const Icon(Icons.print, color: Colors.green, size: 20),
                   onPressed: () =>
-                      _generateCombinedLiquidationPDF(data, action: 'print'),
+                      _printLiquidationWithoutVatPDF(data, action: 'print'),
                 ),
               ],
             ],
