@@ -156,7 +156,7 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  // Build Request Form Widget (WITH SEPARATION LINE)
+  // Build Request Form Widget (WITH "Purpose: " prefix)
   Future<pw.Widget> _buildRequestFormWidget(
     Map<String, dynamic> data,
     Map<String, dynamic> userData,
@@ -314,7 +314,7 @@ class _AdminPageState extends State<AdminPage> {
                   ),
                 ),
 
-              // Reason Row
+              // Reason Row with "Purpose: " prefix
               if (reason.isNotEmpty)
                 pw.Container(
                   padding: const pw.EdgeInsets.all(4),
@@ -324,7 +324,7 @@ class _AdminPageState extends State<AdminPage> {
                       pw.Expanded(
                         flex: 3,
                         child: pw.Text(
-                          reason,
+                          "Purpose: $reason",
                           style: pw.TextStyle(fontSize: 7),
                         ),
                       ),
@@ -396,7 +396,7 @@ class _AdminPageState extends State<AdminPage> {
           ],
         ),
 
-        // SEPARATION LINE - Adds visual separation between form and remaining space
+        // SEPARATION LINE
         pw.SizedBox(height: 20),
         pw.Divider(
           thickness: 1,
@@ -407,7 +407,7 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  // Build Liquidation Form Widget (WITH SEPARATION LINE)
+  // Build Liquidation Form Widget (WITHOUT "Purpose: " prefix)
   Future<pw.Widget> _buildLiquidationFormWidget(
     Map<String, dynamic> data,
     Map<String, dynamic> userData, {
@@ -485,7 +485,7 @@ class _AdminPageState extends State<AdminPage> {
           _pdfInfoRow("Department", userDepartment),
         pw.SizedBox(height: 3),
 
-        // Particulars (Purpose/Reason)
+        // Particulars (NO "Purpose: " prefix)
         if (reason.isNotEmpty) _pdfInfoRow("Particulars:", reason),
         pw.SizedBox(height: 3),
 
@@ -578,7 +578,7 @@ class _AdminPageState extends State<AdminPage> {
           ],
         ),
 
-        // SEPARATION LINE - Adds visual separation between form and remaining space
+        // SEPARATION LINE
         pw.SizedBox(height: 20),
         pw.Divider(
           thickness: 1,
@@ -1637,13 +1637,11 @@ class _AdminPageState extends State<AdminPage> {
             ),
             Row(
               children: [
-                // Print Request Form button - always available for all statuses
                 IconButton(
                   tooltip: 'Print Request Form',
                   icon: const Icon(Icons.print, color: Colors.purple, size: 24),
                   onPressed: () => _printRequestPDF(data, action: 'print'),
                 ),
-
                 if (status == "Pending") ...[
                   IconButton(
                     icon: const Icon(
