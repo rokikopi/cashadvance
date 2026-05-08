@@ -198,8 +198,7 @@ class _HomePageState extends State<HomePage> {
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(20),
-        build: (pw.Context context) =>
-            liquidationForm, // Removed the outer container with border
+        build: (pw.Context context) => liquidationForm,
       ),
     );
 
@@ -237,8 +236,7 @@ class _HomePageState extends State<HomePage> {
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(20),
-        build: (pw.Context context) =>
-            liquidationForm, // Removed the outer container with border
+        build: (pw.Context context) => liquidationForm,
       ),
     );
 
@@ -254,7 +252,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Build Request Form Widget
+  // Build Request Form Widget (WITH SEPARATION LINE)
   Future<pw.Widget> _buildRequestFormWidget(
     Map<String, dynamic> data,
     Map<String, dynamic> userData,
@@ -493,11 +491,19 @@ class _HomePageState extends State<HomePage> {
             pw.Expanded(child: _pdfSignatureBlock("RELEASED BY:", "")),
           ],
         ),
+
+        // SEPARATION LINE - Adds visual separation between form and remaining space
+        pw.SizedBox(height: 20),
+        pw.Divider(
+          thickness: 1,
+          color: PdfColors.grey400,
+        ),
+        pw.SizedBox(height: 20),
       ],
     );
   }
 
-  // Build Liquidation Form Widget
+  // Build Liquidation Form Widget (WITH SEPARATION LINE)
   Future<pw.Widget> _buildLiquidationFormWidget(
     Map<String, dynamic> data,
     Map<String, dynamic> userData, {
@@ -549,131 +555,133 @@ class _HomePageState extends State<HomePage> {
 
     String amountInWords = "${_numberToWords(amount.round())} PESOS ONLY";
 
-    return pw.Container(
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: PdfColors.black, width: 1),
-      ),
-      padding: const pw.EdgeInsets.all(8),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          // Header
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text(
-                fundType,
-                style: pw.TextStyle(
-                  fontSize: 7,
-                  fontWeight: pw.FontWeight.bold,
-                ),
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        // Header
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text(
+              fundType,
+              style: pw.TextStyle(
+                fontSize: 7,
+                fontWeight: pw.FontWeight.bold,
               ),
-              pw.Text("Ref: $refId", style: pw.TextStyle(fontSize: 6)),
-            ],
-          ),
-          pw.SizedBox(height: 4),
-
-          // Pay to
-          _pdfInfoRow("Pay to", employeeName),
-          if (userPosition.isNotEmpty) _pdfInfoRow("Position", userPosition),
-          if (userDepartment.isNotEmpty)
-            _pdfInfoRow("Department", userDepartment),
-          pw.SizedBox(height: 3),
-
-          // Particulars (Purpose/Reason)
-          if (reason.isNotEmpty) _pdfInfoRow("Particulars:", reason),
-          pw.SizedBox(height: 3),
-
-          // Items list (without amounts)
-          if (items.isNotEmpty) ...[
-            _pdfInfoRow("Items", ""),
-            for (var item in items)
-              pw.Padding(
-                padding: const pw.EdgeInsets.only(left: 12),
-                child: pw.Text(
-                  "• ${item['description']}",
-                  style: pw.TextStyle(fontSize: 6),
-                ),
-              ),
+            ),
+            pw.Text("Ref: $refId", style: pw.TextStyle(fontSize: 6)),
           ],
-          pw.SizedBox(height: 3),
+        ),
+        pw.SizedBox(height: 4),
 
-          // Amount in Words and Total
-          _pdfInfoRow("Amt in Words", amountInWords),
-          _pdfInfoRow(
-            "Total Amount",
-            "P${NumberFormat('#,##0.00').format(amount)}",
-          ),
-          pw.SizedBox(height: 4),
+        // Pay to
+        _pdfInfoRow("Pay to", employeeName),
+        if (userPosition.isNotEmpty) _pdfInfoRow("Position", userPosition),
+        if (userDepartment.isNotEmpty)
+          _pdfInfoRow("Department", userDepartment),
+        pw.SizedBox(height: 3),
 
-          // No. and Date
-          pw.Row(
-            children: [
-              pw.Text(
-                "No. : ",
-                style: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 6,
-                ),
+        // Particulars (Purpose/Reason)
+        if (reason.isNotEmpty) _pdfInfoRow("Particulars:", reason),
+        pw.SizedBox(height: 3),
+
+        // Items list (without amounts)
+        if (items.isNotEmpty) ...[
+          _pdfInfoRow("Items", ""),
+          for (var item in items)
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(left: 12),
+              child: pw.Text(
+                "• ${item['description']}",
+                style: pw.TextStyle(fontSize: 6),
               ),
-              pw.Text(refId, style: pw.TextStyle(fontSize: 6)),
-              pw.SizedBox(width: 8),
-              pw.Text(
-                "Date : ",
-                style: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 6,
-                ),
-              ),
-              pw.Text(dateStr, style: pw.TextStyle(fontSize: 6)),
-            ],
-          ),
-          pw.SizedBox(height: 6),
-
-          // Table
-          _buildLiquidationTable(
-            itemsWithVat,
-            totalVatAmount,
-            amount,
-            includeVat,
-          ),
-
-          pw.SizedBox(height: 12),
-
-          // Signatures
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Expanded(
-                child: _pdfSignatureBlock(
-                  "PREPARED BY:",
-                  "$employeeName\n${userPosition.isNotEmpty ? userPosition : "EMPLOYEE"}",
-                ),
-              ),
-              pw.SizedBox(width: 8),
-              pw.Expanded(
-                child: _pdfSignatureBlock(
-                  "CHECKED BY:",
-                  "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
-                ),
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 8),
-
-          // Approved By - centered
-          pw.Row(
-            children: [
-              pw.Expanded(
-                child: _pdfSignatureBlock(
-                  "APPROVED BY:",
-                  "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
-                ),
-              ),
-            ],
-          ),
+            ),
         ],
-      ),
+        pw.SizedBox(height: 3),
+
+        // Amount in Words and Total
+        _pdfInfoRow("Amt in Words", amountInWords),
+        _pdfInfoRow(
+          "Total Amount",
+          "P${NumberFormat('#,##0.00').format(amount)}",
+        ),
+        pw.SizedBox(height: 4),
+
+        // No. and Date
+        pw.Row(
+          children: [
+            pw.Text(
+              "No. : ",
+              style: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 6,
+              ),
+            ),
+            pw.Text(refId, style: pw.TextStyle(fontSize: 6)),
+            pw.SizedBox(width: 8),
+            pw.Text(
+              "Date : ",
+              style: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 6,
+              ),
+            ),
+            pw.Text(dateStr, style: pw.TextStyle(fontSize: 6)),
+          ],
+        ),
+        pw.SizedBox(height: 6),
+
+        // Table
+        _buildLiquidationTable(
+          itemsWithVat,
+          totalVatAmount,
+          amount,
+          includeVat,
+        ),
+
+        pw.SizedBox(height: 12),
+
+        // Signatures
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Expanded(
+              child: _pdfSignatureBlock(
+                "PREPARED BY:",
+                "$employeeName\n${userPosition.isNotEmpty ? userPosition : "EMPLOYEE"}",
+              ),
+            ),
+            pw.SizedBox(width: 8),
+            pw.Expanded(
+              child: _pdfSignatureBlock(
+                "CHECKED BY:",
+                "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 8),
+
+        // Approved By - centered
+        pw.Row(
+          children: [
+            pw.Expanded(
+              child: _pdfSignatureBlock(
+                "APPROVED BY:",
+                "DE VILLA, JOANA PAR\nSENIOR FINANCE MANAGER",
+              ),
+            ),
+          ],
+        ),
+
+        // SEPARATION LINE - Adds visual separation between form and remaining space
+        pw.SizedBox(height: 20),
+        pw.Divider(
+          thickness: 1,
+          color: PdfColors.grey400,
+        ),
+        pw.SizedBox(height: 20),
+      ],
     );
   }
 
@@ -859,13 +867,7 @@ class _HomePageState extends State<HomePage> {
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(20),
-        build: (pw.Context context) => pw.Container(
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.black, width: 1),
-          ),
-          padding: const pw.EdgeInsets.all(12),
-          child: requestForm,
-        ),
+        build: (pw.Context context) => requestForm,
       ),
     );
 
