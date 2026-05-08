@@ -156,7 +156,7 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  // Build Request Form Widget (WITH "Purpose: " prefix)
+  // Build Request Form Widget
   Future<pw.Widget> _buildRequestFormWidget(
     Map<String, dynamic> data,
     Map<String, dynamic> userData,
@@ -314,7 +314,7 @@ class _AdminPageState extends State<AdminPage> {
                   ),
                 ),
 
-              // Reason Row with "Purpose: " prefix
+              // Reason Row
               if (reason.isNotEmpty)
                 pw.Container(
                   padding: const pw.EdgeInsets.all(4),
@@ -407,7 +407,7 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  // Build Liquidation Form Widget (WITHOUT "Purpose: " prefix)
+  // Build Liquidation Form Widget
   Future<pw.Widget> _buildLiquidationFormWidget(
     Map<String, dynamic> data,
     Map<String, dynamic> userData, {
@@ -485,7 +485,7 @@ class _AdminPageState extends State<AdminPage> {
           _pdfInfoRow("Department", userDepartment),
         pw.SizedBox(height: 3),
 
-        // Particulars (NO "Purpose: " prefix)
+        // Particulars
         if (reason.isNotEmpty) _pdfInfoRow("Particulars:", reason),
         pw.SizedBox(height: 3),
 
@@ -785,6 +785,763 @@ class _AdminPageState extends State<AdminPage> {
         filename: 'RequestForm_${data['referenceId']}.pdf',
       );
     }
+  }
+
+  // DELETE TRANSACTIONS - Show dialog to select transactions to delete
+  Future<void> _showDeleteOptions() async {
+    // Show loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Loading transactions...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    // Fetch all transactions
+    final allTransactions = await FirebaseFirestore.instance
+        .collection('advances')
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    if (allTransactions.docs.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No transactions to delete'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Fetch all users data for mapping
+    final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+    final Map<String, Map<String, dynamic>> usersMap = {};
+    for (var userDoc in usersSnapshot.docs) {
+      usersMap[userDoc.id] = userDoc.data() as Map<String, dynamic>;
+    }
+
+    Set<String> selectedTransactions = {};
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.85,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            ),
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "Delete Transactions",
+                        style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Select All Row
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: selectedTransactions.length == allTransactions.docs.length &&
+                            allTransactions.docs.isNotEmpty,
+                        onChanged: (value) {
+                          setModalState(() {
+                            if (value == true) {
+                              selectedTransactions = allTransactions.docs.map((doc) => doc.id).toSet();
+                            } else {
+                              selectedTransactions.clear();
+                            }
+                          });
+                        },
+                        activeColor: Colors.redAccent,
+                      ),
+                      Text(
+                        "Select All",
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (selectedTransactions.isNotEmpty)
+                        Text(
+                          "${selectedTransactions.length} selected",
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                const Divider(height: 1),
+
+                // Transaction List
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: allTransactions.docs.length,
+                    itemBuilder: (context, index) {
+                      final doc = allTransactions.docs[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      final refId = data['referenceId'] ?? 'N/A';
+                      final amount = double.tryParse(data['amount'].toString()) ?? 0;
+                      final status = data['status'] ?? 'Pending';
+                      final dateStr = data['createdAt'] != null
+                          ? DateFormat('MM/dd/yyyy').format((data['createdAt'] as Timestamp).toDate())
+                          : 'N/A';
+                      
+                      // Get user details
+                      final userId = data['userId'];
+                      final userData = usersMap[userId];
+                      final employeeName = userData != null 
+                          ? "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}".trim()
+                          : 'Unknown User';
+                      
+                      // Get items - FIXED: Properly convert to List<String>
+                      final items = data['items'] as List<dynamic>? ?? [];
+                      String itemsPreview = '';
+                      if (items.isNotEmpty) {
+                        final List<String> itemDescriptions = [];
+                        for (var item in items) {
+                          final description = item['description'] as String? ?? '';
+                          if (description.isNotEmpty) {
+                            itemDescriptions.add(description);
+                          }
+                        }
+                        itemsPreview = itemDescriptions.join(', ');
+                      }
+                      
+                      final hasValidItems = itemsPreview.isNotEmpty;
+                      
+                      Color statusColor = status == 'Approved'
+                          ? Colors.green
+                          : (status == 'Rejected' ? Colors.redAccent : Colors.orange);
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: Colors.grey[200]!),
+                        ),
+                        child: CheckboxListTile(
+                          value: selectedTransactions.contains(doc.id),
+                          onChanged: (value) {
+                            setModalState(() {
+                              if (value == true) {
+                                selectedTransactions.add(doc.id);
+                              } else {
+                                selectedTransactions.remove(doc.id);
+                              }
+                            });
+                          },
+                          activeColor: Colors.redAccent,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          title: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      refId,
+                                      style: GoogleFonts.robotoMono(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: Colors.grey[800],
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      status,
+                                      style: TextStyle(
+                                        color: statusColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              // Employee Name
+                              Container(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Icon(
+                                        Icons.person_outline,
+                                        size: 14,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        employeeName,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              // Items
+                              if (hasValidItems) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Icon(
+                                          Icons.receipt_outlined,
+                                          size: 14,
+                                          color: Colors.orange[700],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              "Items:",
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.grey[700],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              itemsPreview,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey[600],
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 4),
+                              // Amount and Date row
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    "Amount: P${NumberFormat('#,##0.00').format(amount)}",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  Text(
+                                    dateStr,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                // Delete Button
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: Colors.grey[200]!)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.grey[300]!),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            "Cancel",
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: selectedTransactions.isEmpty
+                              ? null
+                              : () async {
+                                  // Show confirmation dialog with selected transactions summary
+                                  final selectedCount = selectedTransactions.length;
+                                  final selectedDocs = allTransactions.docs
+                                      .where((doc) => selectedTransactions.contains(doc.id))
+                                      .toList();
+                                  
+                                  double totalAmount = 0;
+                                  for (var doc in selectedDocs) {
+                                    final data = doc.data() as Map<String, dynamic>;
+                                    totalAmount += double.tryParse(data['amount'].toString()) ?? 0;
+                                  }
+
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text("Confirm Delete"),
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Are you sure you want to delete $selectedCount transaction(s)?",
+                                            style: const TextStyle(fontSize: 14),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            "Total amount: P${NumberFormat('#,##0.00').format(totalAmount)}",
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.red,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          const Text(
+                                            "This action cannot be undone.",
+                                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                                          ),
+                                        ],
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, false),
+                                          child: const Text("Cancel"),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context, true),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: Colors.red,
+                                          ),
+                                          child: const Text("Delete"),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (confirm == true && mounted) {
+                                    // Show loading
+                                    Navigator.pop(context); // Close bottom sheet
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Deleting transactions...'),
+                                        duration: Duration(seconds: 1),
+                                      ),
+                                    );
+
+                                    try {
+                                      // Delete selected transactions using batch
+                                      final batch = FirebaseFirestore.instance.batch();
+                                      for (String docId in selectedTransactions) {
+                                        batch.delete(
+                                          FirebaseFirestore.instance.collection('advances').doc(docId),
+                                        );
+                                      }
+                                      await batch.commit();
+
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Successfully deleted ${selectedTransactions.length} transaction(s)'),
+                                            backgroundColor: Colors.green,
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Error deleting transactions: $e'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            "Delete (${selectedTransactions.length})",
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // EXPORT ALL DATA TO PDF
+  Future<void> _exportAllDataToPDF() async {
+    final pdf = pw.Document();
+
+    // Show loading indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Generating PDF report...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // Fetch all transactions from all statuses
+    final pendingSnapshot = await FirebaseFirestore.instance
+        .collection('advances')
+        .where('status', isEqualTo: 'Pending')
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    final approvedSnapshot = await FirebaseFirestore.instance
+        .collection('advances')
+        .where('status', isEqualTo: 'Approved')
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    final rejectedSnapshot = await FirebaseFirestore.instance
+        .collection('advances')
+        .where('status', isEqualTo: 'Rejected')
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    // Fetch all user data once to avoid multiple calls
+    final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+    final Map<String, String> userNames = {};
+    for (var userDoc in usersSnapshot.docs) {
+      final userData = userDoc.data() as Map<String, dynamic>;
+      userNames[userDoc.id] = "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}".trim();
+      if (userNames[userDoc.id]!.isEmpty) {
+        userNames[userDoc.id] = userData['email'] ?? 'Unknown';
+      }
+    }
+
+    // Calculate totals
+    double totalApprovedAmount = 0;
+    double totalPendingAmount = 0;
+    double totalRejectedAmount = 0;
+
+    for (var doc in approvedSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      totalApprovedAmount += double.tryParse(data['amount'].toString()) ?? 0;
+    }
+
+    for (var doc in pendingSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      totalPendingAmount += double.tryParse(data['amount'].toString()) ?? 0;
+    }
+
+    for (var doc in rejectedSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      totalRejectedAmount += double.tryParse(data['amount'].toString()) ?? 0;
+    }
+
+    final totalOverall = totalApprovedAmount + totalPendingAmount + totalRejectedAmount;
+
+    // Build the report
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return [
+            // Header
+            pw.Center(
+              child: pw.Column(
+                children: [
+                  pw.Text(
+                    "CASH ADVANCE REPORT",
+                    style: pw.TextStyle(
+                      fontSize: 20,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 5),
+                  pw.Text(
+                    "Generated on: ${DateFormat('MMMM dd, yyyy hh:mm a').format(DateTime.now())}",
+                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+                  ),
+                  pw.SizedBox(height: 20),
+                  pw.Divider(thickness: 2),
+                  pw.SizedBox(height: 20),
+                ],
+              ),
+            ),
+
+            // Summary Section
+            pw.Container(
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: pw.BorderRadius.circular(5),
+              ),
+              child: pw.Column(
+                children: [
+                  pw.Text(
+                    "SUMMARY",
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  _buildSummaryRow("Total Approved:", "P${NumberFormat('#,##0.00').format(totalApprovedAmount)}", PdfColors.green),
+                  _buildSummaryRow("Total Pending:", "P${NumberFormat('#,##0.00').format(totalPendingAmount)}", PdfColors.orange),
+                  _buildSummaryRow("Total Rejected:", "P${NumberFormat('#,##0.00').format(totalRejectedAmount)}", PdfColors.red),
+                  pw.Divider(),
+                  _buildSummaryRow("GRAND TOTAL:", "P${NumberFormat('#,##0.00').format(totalOverall)}", PdfColors.black, isBold: true),
+                ],
+              ),
+            ),
+
+            pw.SizedBox(height: 20),
+
+            // Approved Transactions Section
+            if (approvedSnapshot.docs.isNotEmpty) ...[
+              pw.Text(
+                "APPROVED TRANSACTIONS",
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.green,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              _buildTransactionsTable(approvedSnapshot.docs, userNames),
+              pw.SizedBox(height: 20),
+            ],
+
+            // Pending Transactions Section
+            if (pendingSnapshot.docs.isNotEmpty) ...[
+              pw.Text(
+                "PENDING TRANSACTIONS",
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.orange,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              _buildTransactionsTable(pendingSnapshot.docs, userNames),
+              pw.SizedBox(height: 20),
+            ],
+
+            // Rejected Transactions Section
+            if (rejectedSnapshot.docs.isNotEmpty) ...[
+              pw.Text(
+                "REJECTED TRANSACTIONS",
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.red,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              _buildTransactionsTable(rejectedSnapshot.docs, userNames),
+              pw.SizedBox(height: 20),
+            ],
+
+            // Footer
+            pw.SizedBox(height: 30),
+            pw.Center(
+              child: pw.Text(
+                "End of Report",
+                style: pw.TextStyle(fontSize: 10, fontStyle: pw.FontStyle.italic),
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+
+    // Show print dialog
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
+  }
+
+  // Helper to build summary row
+  pw.Widget _buildSummaryRow(String label, String value, PdfColor color, {bool isBold = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontSize: 11,
+              fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+            ),
+          ),
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: 11,
+              fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper to build transactions table
+  pw.Widget _buildTransactionsTable(List<QueryDocumentSnapshot> docs, Map<String, String> userNames) {
+    List<List<String>> rows = [];
+
+    // Header row
+    rows.add(["Date", "Reference ID", "Employee", "Amount", "Items"]);
+
+    // Data rows
+    for (var doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final dateStr = data['createdAt'] != null
+          ? DateFormat('MM/dd/yyyy').format((data['createdAt'] as Timestamp).toDate())
+          : 'N/A';
+      final refId = data['referenceId'] ?? 'N/A';
+      final amount = double.tryParse(data['amount'].toString()) ?? 0;
+      final items = data['items'] ?? [];
+      final itemCount = items.length;
+      
+      // Get employee name from pre-fetched map
+      final employeeName = userNames[data['userId']] ?? 'Unknown';
+      
+      rows.add([
+        dateStr,
+        refId,
+        employeeName,
+        "P${NumberFormat('#,##0.00').format(amount)}",
+        "$itemCount item(s)",
+      ]);
+    }
+
+    return pw.Table(
+      border: pw.TableBorder.all(),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(1.5),
+        1: const pw.FlexColumnWidth(2),
+        2: const pw.FlexColumnWidth(2.5),
+        3: const pw.FlexColumnWidth(1.5),
+        4: const pw.FlexColumnWidth(2),
+      },
+      children: rows.asMap().entries.map((entry) {
+        final index = entry.key;
+        final row = entry.value;
+        return pw.TableRow(
+          decoration: index == 0
+              ? const pw.BoxDecoration(color: PdfColors.grey300)
+              : (index % 2 == 0 ? const pw.BoxDecoration(color: PdfColors.grey100) : null),
+          children: row.map((cell) {
+            return pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Text(
+                cell,
+                style: pw.TextStyle(
+                  fontSize: 8,
+                  fontWeight: index == 0 ? pw.FontWeight.bold : pw.FontWeight.normal,
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      }).toList(),
+    );
   }
 
   void _showTransactionDetails(Map<String, dynamic> data) {
@@ -1321,6 +2078,18 @@ class _AdminPageState extends State<AdminPage> {
             style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
           ),
           actions: [
+            // Delete Button
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              onPressed: () => _showDeleteOptions(),
+              tooltip: 'Delete Transactions',
+            ),
+            // Export All Data Button
+            IconButton(
+              icon: const Icon(Icons.download_rounded, color: AppColors.primary),
+              onPressed: () => _exportAllDataToPDF(),
+              tooltip: 'Export All Data to PDF',
+            ),
             ListenableBuilder(
               listenable: _notificationService,
               builder: (context, child) {
